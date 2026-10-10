@@ -561,6 +561,7 @@ namespace LaunchHere
         internal DisplayMap()
         {
             DoubleBuffered = true;
+            BackColor = Color.FromArgb(240, 246, 255);
             AccessibleName = "Connected monitor arrangement";
             SetStyle(ControlStyles.ResizeRedraw, true);
         }
@@ -583,7 +584,7 @@ namespace LaunchHere
                 using (var brush = new SolidBrush(fill)) e.Graphics.FillRectangle(brush, rect);
                 using (var pen = new Pen(stroke, 1.5F)) e.Graphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
                 string label = "Display " + index++ + (screen.Primary ? "\nPrimary" : "");
-                TextRenderer.DrawText(e.Graphics, label, Font, Rectangle.Round(rect), SystemInformation.HighContrast ? SystemColors.ControlText : Color.FromArgb(25, 39, 58), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                TextRenderer.DrawText(e.Graphics, label, Font, Rectangle.Round(rect), SystemInformation.HighContrast ? SystemColors.ControlText : Color.FromArgb(25, 39, 58), Glass.PaintText | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
         }
     }

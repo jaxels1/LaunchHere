@@ -64,6 +64,31 @@ namespace LaunchHere
                 CheckFlows(child);
             }
         }
+        private static void CheckClippedPainting(Control control)
+        {
+            using (control)
+            using (var bitmap = new Bitmap(420, 160))
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                control.Size = new Size(260, 60);
+                control.Font = new Font("Segoe UI", 10F);
+                control.Text = "Painting must stay inside this control";
+                control.ForeColor = Glass.Ink;
+                graphics.Clear(Color.Magenta);
+                graphics.TranslateTransform(100, 80);
+                graphics.SetClip(control.ClientRectangle);
+                var paint = control.GetType().GetMethod("OnPaint", BindingFlags.NonPublic | BindingFlags.Instance);
+                paint.Invoke(control, new object[] { new PaintEventArgs(graphics, control.ClientRectangle) });
+                int changedOutside = 0, changedInside = 0;
+                for (int y = 0; y < bitmap.Height; y++)
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    if (bitmap.GetPixel(x, y).ToArgb() == Color.Magenta.ToArgb()) continue;
+                    if (new Rectangle(100, 80, 260, 60).Contains(x, y)) changedInside++; else changedOutside++;
+                }
+                Check(changedInside > 0 && changedOutside == 0, control.GetType().Name + " respects translated graphics and clipping");
+            }
+        }
         [STAThread] private static int Main(string[] args)
         {
             try
@@ -71,6 +96,9 @@ namespace LaunchHere
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 string folder = Path.GetFullPath(args[0]); Directory.CreateDirectory(folder);
+                CheckClippedPainting(new GlassToggle());
+                CheckClippedPainting(new GlassButton());
+                CheckClippedPainting(new DisplayMap());
                 string path = Path.Combine(folder, "test-settings.json");
                 var store = new SettingsStore(path);
                 string migrationFolder = Path.Combine(folder, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(migrationFolder);

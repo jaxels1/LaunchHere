@@ -85,6 +85,6 @@ Installer and update handoff checks are in `Tests/InstallerChecks.ps1` and `Test
 
 ## Publishing a release
 
-Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.0` and attach the generated installer and portable ZIP.
+Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.0.1` and attach the generated installer and portable ZIP.
 
-Keep the generated filenames: `LaunchHere-2.0-Setup-x64.exe` and `LaunchHere-2.0-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.
+Keep the generated filenames: `LaunchHere-2.0.1-Setup-x64.exe` and `LaunchHere-2.0.1-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.
