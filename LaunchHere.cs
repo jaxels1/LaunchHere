@@ -75,7 +75,7 @@ namespace LaunchHere
         private string targetDevice;
         private uint clickTime;
         private int generation, candidateGeneration, movePass;
-        private IntPtr candidate;
+        private IntPtr candidate, clickForeground;
         private long moveAt;
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly bool verify;
@@ -109,7 +109,7 @@ namespace LaunchHere
             {
                 mouseHook = Native.SetWindowsHookEx(14, mouseProc, Native.GetModuleHandle(null), 0);
                 foregroundHook = Native.SetWinEventHook(3, 3, IntPtr.Zero, eventProc, 0, 0, 2);
-                restoreHook = Native.SetWinEventHook(0x17, 0x17, IntPtr.Zero, eventProc, 0, 0, 2);
+                restoreHook = Native.SetWinEventHook(0x16, 0x17, IntPtr.Zero, eventProc, 0, 0, 2);
                 if (mouseHook == IntPtr.Zero || foregroundHook == IntPtr.Zero || restoreHook == IntPtr.Zero)
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not register the mouse/window hooks.");
                 timer = new System.Windows.Forms.Timer { Interval = 100 };
@@ -199,7 +199,21 @@ namespace LaunchHere
             }
         }
 
-        private void Cancel() { targetDevice = null; candidate = IntPtr.Zero; generation++; }
+        private void Cancel() { targetDevice = null; candidate = IntPtr.Zero; clickForeground = IntPtr.Zero; generation++; }
+        internal void BeginRouting(string device, uint time, IntPtr foreground)
+        {
+            Cancel();
+            targetDevice = device;
+            clickTime = time;
+            // Clicking the active taskbar button minimizes that window. Remember
+            // it so the window revealed underneath cannot become our candidate.
+            clickForeground = foreground;
+        }
+        private bool ClickMinimizedForeground()
+        {
+            return clickForeground != IntPtr.Zero &&
+                (!Native.IsWindow(clickForeground) || Native.IsIconic(clickForeground));
+        }
         private IntPtr OnMouse(int code, IntPtr message, IntPtr data)
         {
             // Keep the global hook fast: no disk access, UI Automation, or process queries.
@@ -214,9 +228,8 @@ namespace LaunchHere
                         string cls = Native.ClassName(root);
                         if (Settings.Enabled && message.ToInt64() == 0x201 && IsTaskbar(cls) && (Settings.ThumbnailPreviews || cls != "TaskListThumbnailWnd"))
                         {
-                            Cancel();
-                            targetDevice = Screen.FromPoint(new Point(mouse.point.x, mouse.point.y)).DeviceName;
-                            clickTime = mouse.time;
+                            BeginRouting(Screen.FromPoint(new Point(mouse.point.x, mouse.point.y)).DeviceName,
+                                mouse.time, Native.GetForegroundWindow());
                         }
                         else Cancel();
                     }
@@ -236,6 +249,14 @@ namespace LaunchHere
             try
             {
                 if (verify || !Settings.Enabled || targetDevice == null || hwnd == IntPtr.Zero) return;
+                // MINIMIZESTART can arrive before or after the foreground event.
+                // Cancel either way, before the delayed movement can run.
+                if (eventId == 0x16)
+                {
+                    if (hwnd == clickForeground) Cancel();
+                    return;
+                }
+                if (ClickMinimizedForeground()) { Cancel(); return; }
                 // Unsigned subtraction handles the system tick counter wrapping after 49 days.
                 uint timeout = (uint)Settings.LaunchTimeoutSeconds * 1000;
                 if (unchecked(time - clickTime) > timeout || unchecked((uint)Environment.TickCount - clickTime) > timeout) return;
@@ -277,6 +298,7 @@ namespace LaunchHere
             if (openRequest != null && openRequest.WaitOne(0)) ShowSettings();
             if (verify) { if (clock.ElapsedMilliseconds > 500) ExitThread(); return; }
             if (targetDevice == null) return;
+            if (ClickMinimizedForeground()) { Cancel(); return; }
             if (unchecked((uint)Environment.TickCount - clickTime) > (uint)Settings.LaunchTimeoutSeconds * 1000) { Cancel(); return; }
             if (candidate == IntPtr.Zero || clock.ElapsedMilliseconds < moveAt) return;
             if (candidateGeneration != generation || Native.GetForegroundWindow() != candidate) { Cancel(); return; }

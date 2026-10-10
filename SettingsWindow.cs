@@ -139,7 +139,7 @@ namespace LaunchHere
             appFlow.Controls.Add(TextCard("Finding the right name", "If you're unsure, open Windows Task Manager and look in the Details tab. Some Windows apps share a host process, so an exception for that host can affect more than one app."));
 
             var aboutFlow = Flow(about);
-            aboutFlow.Controls.Add(TextCard("LaunchHere 1.2", "A tiny window concierge for Windows 10 and 11. Runs in the tray and puts app windows on the display you launch them from. No main-monitor favoritism."));
+            aboutFlow.Controls.Add(TextCard("LaunchHere 1.2.1", "A tiny window concierge for Windows 10 and 11. Runs in the tray and puts app windows on the display you launch them from. No main-monitor favoritism."));
             var conciergeCard = Card();
             conciergeCard.Controls.Add(Heading("Meet your window concierge"), 0, 0);
             conciergeMessage = Description("A very small employee with a very specific job. Accepts imaginary biscuits.");
