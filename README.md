@@ -2,7 +2,7 @@
 
 LaunchHere makes apps open on the monitor where you click their taskbar icon, instead of opening on your main monitor.
 
-It runs in the system tray and has a small settings window. There's also a tiny window concierge. You can boop it.
+It runs in the system tray, with a glass-style settings window and app exceptions.
 
 ## Download
 
@@ -37,7 +37,17 @@ To update or uninstall, quit LaunchHere first. Run a newer installer to update, 
 
 ## Settings
 
-You can pause LaunchHere, start it with Windows, adjust how long it waits for an app to open, and choose apps it should leave alone. Your settings save automatically.
+You can pause LaunchHere, start it with Windows, adjust how long it waits for an app to open, and choose apps it should leave alone. Your settings save automatically. Use **Identify displays** to see the display numbers, or export and import a local settings backup.
+
+## Updates and privacy
+
+Press **Check for updates** on the **Updates & privacy** page to check the latest GitHub release. If a newer version is available, LaunchHere downloads it, verifies its checksum, applies it and reopens. You can cancel during the download.
+
+Installed copies update through the installer. Portable copies update in their existing folder. Your preferences are kept.
+
+**Internet is used only when you press Check for updates.** There are no background checks, accounts or analytics. That action connects to GitHub and its download servers, which receive your IP address and the app version. Your settings, app exceptions and window activity stay on your PC. LaunchHere does not record click history or keystrokes.
+
+If Windows security or a work/school policy blocks an unsigned update, it may need to be installed manually. LaunchHere does not disable security settings.
 
 ## Requirements
 
@@ -46,8 +56,6 @@ Windows 10 or 11, 64-bit, with .NET Framework 4.8.
 ## Things to know
 
 Apps might briefly appear on their old monitor before moving. Some games, slow launches, and apps running as administrator may need to be moved manually. Occasionally, an unrelated app opening just after a taskbar click can get moved too.
-
-LaunchHere doesn't collect data or connect to the internet.
 
 ## Building from source
 
@@ -72,3 +80,11 @@ To run the tests, close LaunchHere first, then run:
 ```powershell
 ./Tests/test.ps1
 ```
+
+Installer and update handoff checks are in `Tests/InstallerChecks.ps1` and `Tests/UpdateHandoffChecks.ps1`. Pass `-IsccPath` with the path to `ISCC.exe`; they create and uninstall isolated test copies.
+
+## Publishing a release
+
+Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.0` and attach the generated installer and portable ZIP.
+
+Keep the generated filenames: `LaunchHere-2.0-Setup-x64.exe` and `LaunchHere-2.0-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.

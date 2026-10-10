@@ -26,5 +26,6 @@ $installerOutput = (Resolve-Path -LiteralPath $OutputDirectory).Path
 & $IsccPath "/DOutputFolder=$installerOutput" (Join-Path $PSScriptRoot 'Installer\LaunchHere.iss')
 if ($LASTEXITCODE -ne 0) { throw "Installer build failed: $LASTEXITCODE" }
 $fileVersion = (Get-Item -LiteralPath (Join-Path $PSScriptRoot 'LaunchHere.exe')).VersionInfo.FileVersion
-$releaseVersion = $fileVersion.Substring(0, $fileVersion.LastIndexOf('.'))
+$parsedVersion = [Version]$fileVersion
+$releaseVersion = $parsedVersion.ToString($(if ($parsedVersion.Revision -gt 0) { 4 } elseif ($parsedVersion.Build -gt 0) { 3 } else { 2 }))
 Write-Output (Join-Path $installerOutput "LaunchHere-$releaseVersion-Setup-x64.exe")

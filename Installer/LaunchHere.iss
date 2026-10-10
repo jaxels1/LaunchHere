@@ -14,8 +14,17 @@
 #ifndef OutputFolder
   #define OutputFolder "..\.."
 #endif
-#define AppVersion GetVersionNumbersString("..\LaunchHere.exe")
-#define ReleaseVersion Copy(AppVersion, 1, RPos(".", AppVersion) - 1)
+#ifndef AppFilesFolder
+  #define AppFilesFolder ".."
+#endif
+#define AppVersion GetVersionNumbersString(AddBackslash(AppFilesFolder) + "LaunchHere.exe")
+#define ReleaseVersion AppVersion
+#if Copy(ReleaseVersion, Len(ReleaseVersion) - 1, 2) == ".0"
+  #define ReleaseVersion Copy(ReleaseVersion, 1, RPos(".", ReleaseVersion) - 1)
+  #if Copy(ReleaseVersion, Len(ReleaseVersion) - 1, 2) == ".0"
+    #define ReleaseVersion Copy(ReleaseVersion, 1, RPos(".", ReleaseVersion) - 1)
+  #endif
+#endif
 
 [Setup]
 AppId={{#InstallerAppId}
@@ -56,7 +65,7 @@ SolidCompression=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] on your computer.%n%nApps belong on the screen you clicked. Your tiny window concierge is ready for duty.
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nOpen apps on the display where you click their taskbar icon.
 SetupAppRunningError=LaunchHere is running in the system tray.%n%nRight-click its tray icon and choose Exit, then click OK to continue. Closing the settings window does not quit the app.
 UninstallAppRunningError=LaunchHere is running in the system tray.%n%nRight-click its tray icon and choose Exit, then click OK to uninstall.
 
@@ -64,9 +73,9 @@ UninstallAppRunningError=LaunchHere is running in the system tray.%n%nRight-clic
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\LaunchHere.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\LaunchHere.exe.config"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppFilesFolder}\LaunchHere.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppFilesFolder}\LaunchHere.exe.config"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppFilesFolder}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\LaunchHere.exe"; Parameters: "--settings"; WorkingDir: "{app}"

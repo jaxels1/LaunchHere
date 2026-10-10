@@ -2,6 +2,11 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using Timer = System.Windows.Forms.Timer;
 using System.Windows.Forms;
 namespace LaunchHere
 {
@@ -9,6 +14,25 @@ namespace LaunchHere
     {
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
         private static int count;
+        private sealed class UpdateRequests { internal int Count, Delay = 40; }
+        private sealed class UpdateHandler : HttpMessageHandler
+        {
+            private readonly UpdateRequests requests;
+            internal UpdateHandler(UpdateRequests requests) { this.requests = requests; }
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellation)
+            {
+                requests.Count++;
+                await Task.Delay(requests.Delay, cancellation);
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"tag_name\":\"v1.3.0\",\"draft\":false,\"prerelease\":false,\"assets\":[]}") };
+            }
+        }
+        private static void WaitFor(Func<bool> condition)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!condition() && DateTime.UtcNow < deadline) { Application.DoEvents(); Thread.Sleep(10); }
+            Application.DoEvents();
+            if (!condition()) throw new Exception("Timed out waiting for update GUI");
+        }
         private static void Check(bool pass, string message) { if (!pass) throw new Exception(message); count++; Console.WriteLine("PASS " + message); }
         private static T Find<T>(Control parent, string accessibleName) where T : Control
         {
@@ -109,8 +133,37 @@ namespace LaunchHere
                     input.Clear();
                     app.ChangeSettings(s => { s.Enabled = true; s.ThumbnailPreviews = true; s.RetryMovement = true; s.LaunchTimeoutSeconds = 12; });
                     window.ShowAbout(); Application.DoEvents();
-                    FindButton(window, "Boop the concierge").PerformClick();
-                    Check(Find<Label>(window, "Concierge message").Text.StartsWith("Boop!") && app.Settings.Enabled && app.Settings.LaunchTimeoutSeconds == 12, "silly interaction leaves routing settings unchanged");
+                    Check(FindButton(window, "Boop the concierge") == null && Find<Label>(window, "Concierge message") == null, "playful controls removed");
+                    Check(Find<Button>(window, "Check for updates") != null && Find<Label>(window, "Update status").Text.Contains("only when"), "manual update button and privacy notice present");
+                    string importPath = Path.Combine(folder, "import.json");
+                    new SettingsStore(importPath).Save(new AppSettings { LaunchTimeoutSeconds = 9, Enabled = false });
+                    window.ImportSettingsFile(importPath);
+                    Check(!app.Settings.Enabled && store.Load(out notice).LaunchTimeoutSeconds == 9, "imported backup persists routing settings");
+                    File.WriteAllText(importPath, "broken");
+                    bool rejected = false;
+                    try { window.ImportSettingsFile(importPath); } catch (InvalidDataException) { rejected = true; }
+                    Check(rejected && !app.Settings.Enabled && app.Settings.LaunchTimeoutSeconds == 9, "invalid backup does not reset settings");
+                    app.ChangeSettings(s => { s.Enabled = true; s.LaunchTimeoutSeconds = 12; });
+                    tabs.SelectedIndex = 0; Application.DoEvents();
+                    FindButton(window, "Identify displays").PerformClick();
+                    var overlays = (System.Collections.ICollection)typeof(SettingsWindow).GetField("identification", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(window);
+                    Check(overlays.Count == Screen.AllScreens.Length, "display identification shows one overlay per screen");
+                    typeof(SettingsWindow).GetMethod("CloseIdentification", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, null);
+                    var requests = new UpdateRequests();
+                    using (var updateWindow = new SettingsWindow(app, new UpdateClient(delegate { return new HttpClient(new UpdateHandler(requests)); })))
+                    {
+                        updateWindow.Show(); updateWindow.ShowAbout(); Application.DoEvents();
+                        Check(requests.Count == 0, "opening settings and update page makes no request");
+                        var checkButton = Find<Button>(updateWindow, "Check for updates");
+                        checkButton.PerformClick();
+                        WaitFor(delegate { return checkButton.Enabled; });
+                        Check(requests.Count == 1 && Find<Label>(updateWindow, "Update status").Text.Contains("up to date"), "manual check updates status without downloading older release");
+                        requests.Delay = 1500;
+                        checkButton.PerformClick();
+                        FindButton(updateWindow, "Cancel download").PerformClick();
+                        WaitFor(delegate { return checkButton.Enabled; });
+                        Check(requests.Count == 2 && Find<Label>(updateWindow, "Update status").Text.Contains("cancelled"), "cancel control stops request and restores update button");
+                    }
                     for (int i = 0; i < tabs.TabCount; i++)
                     {
                         tabs.SelectedIndex = i; Application.DoEvents();

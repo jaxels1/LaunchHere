@@ -17,7 +17,9 @@
   <ItemGroup>
     <Reference Include="System" /><Reference Include="System.Core" /><Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" /><Reference Include="System.Runtime.Serialization" /><Reference Include="System.Xml" />
+    <Reference Include="System.Net.Http" /><Reference Include="System.IO.Compression" /><Reference Include="System.IO.Compression.FileSystem" />
     <Compile Include="LaunchHere.cs" /><Compile Include="Settings.cs" /><Compile Include="SettingsWindow.cs" /><Compile Include="AssemblyInfo.cs" />
+    <Compile Include="GlassControls.cs" /><Compile Include="Updates.cs" /><Compile Include="UpdateFiles.cs" /><Compile Include="UpdateRunner.cs" />
     <Content Include="LaunchHere.exe.config"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
     <None Include="app.manifest" /><None Include="LaunchHere.ico" />
   </ItemGroup>

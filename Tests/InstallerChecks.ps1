@@ -57,7 +57,8 @@ try {
     }
     Check (Test-Path -LiteralPath $uninstallKey) 'registered in current-user Windows Apps list'
     $builtVersion = (Get-Item -LiteralPath (Join-Path $sourceRoot 'LaunchHere.exe')).VersionInfo.FileVersion
-    $expectedVersion = $builtVersion.Substring(0, $builtVersion.LastIndexOf('.'))
+    $parsedVersion = [Version]$builtVersion
+    $expectedVersion = $parsedVersion.ToString($(if ($parsedVersion.Revision -gt 0) { 4 } elseif ($parsedVersion.Build -gt 0) { 3 } else { 2 }))
     Check ((Get-ItemProperty -LiteralPath $uninstallKey).DisplayVersion -eq $expectedVersion) 'correct version registered'
     Check (Test-Path -LiteralPath $startShortcut) 'Start menu shortcut created'
     Check (-not (Test-Path -LiteralPath $desktopShortcut)) 'desktop shortcut is optional'
