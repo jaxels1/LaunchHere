@@ -4,6 +4,12 @@ LaunchHere makes apps open on the monitor where you click their taskbar icon, in
 
 It runs in the system tray and has a small settings window. There's also a tiny window concierge. You can boop it.
 
+## Download
+
+[Download LaunchHere for Windows](https://github.com/jaxels1/LaunchHere/releases/latest)
+
+On the release page, download the Windows app ZIP under **Assets**.
+
 ## How to use it
 
 1. Download and extract the Windows app ZIP.
