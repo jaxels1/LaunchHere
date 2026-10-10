@@ -8,19 +8,32 @@ It runs in the system tray and has a small settings window. There's also a tiny 
 
 [Download LaunchHere for Windows](https://github.com/jaxels1/LaunchHere/releases/latest)
 
-On the release page, download the Windows app ZIP under **Assets**.
+On the release page, download the **Setup-x64.exe** file under **Assets** for the installer, or the Windows app ZIP for the portable version.
+
+## Windows SmartScreen
+
+LaunchHere is currently unsigned, so Windows may show **"Windows protected your PC"** when you run the installer or app.
+
+If you downloaded it from [this repository's releases](https://github.com/jaxels1/LaunchHere/releases/latest) and trust the app:
+
+1. Click **More info**.
+2. Click **Run anyway** to continue.
+
+You don't need to turn off SmartScreen or your antivirus. If **Run anyway** isn't available, your Windows security settings or organization may block it.
 
 ## How to use it
 
-1. Download and extract the Windows app ZIP.
-2. Keep `LaunchHere.exe` and `LaunchHere.exe.config` in the same folder.
-3. Run `LaunchHere.exe`.
-4. In Windows taskbar settings, turn on showing the taskbar on all displays.
-5. Click an app's taskbar icon on the monitor where you want it to open.
+1. Run the installer, then open LaunchHere from the Start menu.
+2. In Windows taskbar settings, turn on showing the taskbar on all displays.
+3. Click an app's taskbar icon on the monitor where you want it to open.
+
+For the portable version, extract the ZIP and run `LaunchHere.exe`. Keep `LaunchHere.exe` and `LaunchHere.exe.config` in the same folder.
 
 Click the LaunchHere tray icon to open settings. If you don't see it, check the hidden-icons arrow beside the clock.
 
 Closing the settings window keeps LaunchHere running. Use **Quit app** to stop it.
+
+To update or uninstall, quit LaunchHere first. Run a newer installer to update, or remove LaunchHere through Windows **Settings > Apps**. Your preferences are kept if you reinstall.
 
 ## Settings
 
@@ -45,6 +58,14 @@ Open PowerShell in the source folder and run:
 ```
 
 You can also open `LaunchHere.csproj` in Visual Studio with the .NET Framework 4.8 developer targeting pack installed.
+
+To build the installer, install [Inno Setup 7](https://jrsoftware.org/isdl.php), then run:
+
+```powershell
+./build-installer.ps1
+```
+
+If the compiler isn't found, pass `-IsccPath` with the full path to `ISCC.exe`. The installer is created beside the source folder.
 
 To run the tests, close LaunchHere first, then run:
 
