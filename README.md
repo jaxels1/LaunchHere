@@ -2,9 +2,7 @@
 
 LaunchHere makes apps open on the monitor where you click their taskbar icon, instead of opening on your main monitor.
 
-It runs in the system tray, with a dark settings window, app exceptions and a local command launcher.
-
-The window has a grid of `>` characters that moves and glows near your cursor, with ripples when you click. Muted blue controls sit above frosted panels. Tabs switch immediately, with a smoothly moving selection indicator. Background effects repaint only the exposed canvas, while panels stay cached. Animations follow Windows settings and stop when the window is hidden or inactive.
+LaunchHere runs quietly in the system tray, with a simple, lightweight UI for settings, app exceptions and quick launching.
 
 ## Download
 
