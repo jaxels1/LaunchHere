@@ -81,6 +81,28 @@ namespace LaunchHere
                 CheckNativeScrolling(child);
             }
         }
+        private static void CheckScrollColors(Control parent)
+        {
+            foreach (Control child in parent.Controls)
+            {
+                var flow = child as GlassFlow;
+                if (flow != null && flow.Visible && flow.VerticalScroll.Visible && !SystemInformation.HighContrast)
+                {
+                    Form form = flow.FindForm(); form.Activate(); Application.DoEvents();
+                    if (Native.GetForegroundWindow() != form.Handle) throw new Exception("Only the foreground test window may be sampled.");
+                    int barWidth = flow.Width - flow.ClientSize.Width;
+                    var point = flow.PointToScreen(new Point(flow.ClientSize.Width + barWidth / 2, flow.Height * 3 / 4));
+                    using (var image = new Bitmap(1, 1))
+                    using (var graphics = Graphics.FromImage(image))
+                    {
+                        graphics.CopyFromScreen(point, Point.Empty, new Size(1, 1));
+                        Color pixel = image.GetPixel(0, 0);
+                        Check(pixel.R > 150 && pixel.G > 150 && pixel.B > 150, "native scrollbar keeps the light palette after a setting changes");
+                    }
+                }
+                CheckScrollColors(child);
+            }
+        }
         private static void CheckClippedPainting(Control control)
         {
             using (control)
@@ -149,6 +171,103 @@ namespace LaunchHere
                 Check(seamless, control.GetType().Name + " corners match the " + (insideCard ? "nested card" : "window") + " background");
             }
         }
+        private static void CheckMotion()
+        {
+            using (var form = new GlassForm { ClientSize = new Size(420, 160), ShowInTaskbar = false })
+            using (var owner = new Control { Bounds = new Rectangle(10, 10, 100, 40) })
+            {
+                form.Controls.Add(owner); form.Show(); Application.DoEvents();
+                bool allowed = true; int frames = 0;
+                using (var motion = new GlassMotion(owner, 0, delegate { frames++; }, delegate { return allowed; }))
+                {
+                    motion.MoveTo(1, 240);
+                    WaitFor(() => motion.Value > .1);
+                    Check(motion.Value < 1 && motion.Running, "motion draws intermediate frames");
+                    double beforeReverse = motion.Value;
+                    motion.MoveTo(0, 180);
+                    Check(motion.Value >= beforeReverse && motion.Value < 1, "reversing motion continues from its current position");
+                    WaitFor(() => !motion.Running);
+                    Check(motion.Value == 0, "reversed motion settles at the requested state");
+                    int settledFrames = frames;
+                    var idle = System.Diagnostics.Stopwatch.StartNew();
+                    while (idle.ElapsedMilliseconds < 80) { Application.DoEvents(); Thread.Sleep(5); }
+                    Check(frames == settledFrames, "settled motion stops producing frames");
+                    motion.MoveTo(1, 240); owner.Hide();
+                    Check(!motion.Running && motion.Value == 1, "hidden controls finish motion and stop the timer");
+                    owner.Show(); allowed = false; motion.MoveTo(0, 240);
+                    Check(!motion.Running && motion.Value == 0, "reduced motion changes state immediately");
+                    allowed = true; motion.MoveTo(1, 240); allowed = false;
+                    WaitFor(() => !motion.Running);
+                    Check(motion.Value == 1, "disabling motion during a transition settles safely");
+                    allowed = true; motion.MoveTo(0, 240); motion.Dispose();
+                    Check(!motion.Running, "disposing an active control transition releases its timer");
+                }
+                using (var toggle = new GlassToggle { Text = "", Bounds = new Rectangle(10, 70, 120, 40) })
+                {
+                    form.Controls.Add(toggle); Application.DoEvents();
+                    var position = (GlassMotion)typeof(GlassToggle).GetField("position", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(toggle);
+                    toggle.Checked = true;
+                    Check(toggle.Checked, "toggle behavior changes before the visual transition finishes");
+                    if (GlassMotion.AnimationsEnabled())
+                    {
+                        WaitFor(() => position.Value > .1);
+                        using (var image = new Bitmap(toggle.Width, toggle.Height))
+                        {
+                            toggle.DrawToBitmap(image, toggle.ClientRectangle);
+                            int first = -1, last = -1;
+                            double scale = toggle.DeviceDpi / 96.0;
+                            for (int x = 3; x < Math.Min(toggle.Width, (int)(39 * scale)); x++)
+                            {
+                                Color pixel = image.GetPixel(x, toggle.Height / 2);
+                                if (pixel.R > 250 && pixel.G > 250 && pixel.B > 250) { if (first < 0) first = x; last = x; }
+                            }
+                            double center = (first + last) / 2.0;
+                            Check(first >= 0 && center > 1 + 11 * scale && center < 1 + 27 * scale, "toggle paints its knob between the two endpoints (center " + center + ", DPI " + toggle.DeviceDpi + ")");
+                        }
+                    }
+                    WaitFor(() => !position.Running);
+                    Check(position.Value == 1, "toggle settles fully on");
+                    toggle.Checked = false; form.Hide();
+                    Check(!position.Running && position.Value == 0, "hiding settings settles the toggle fully off");
+                }
+            }
+        }
+        private static Color ButtonPixel(GlassButton button)
+        {
+            using (var image = new Bitmap(button.Width, button.Height))
+            {
+                button.DrawToBitmap(image, button.ClientRectangle);
+                return image.GetPixel(button.Width / 2, button.Height / 2);
+            }
+        }
+        private static void CheckButtonMotion()
+        {
+            using (var form = new GlassForm { ClientSize = new Size(300, 180), ShowInTaskbar = false })
+            using (var button = new GlassButton { Bounds = new Rectangle(30, 50, 180, 40), Text = "", BackColor = Color.White })
+            {
+                form.Controls.Add(button); form.Show(); Application.DoEvents();
+                Color normal = ButtonPixel(button);
+                var tint = (GlassTint)typeof(GlassButton).GetField("tint", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(button);
+                var motion = (GlassMotion)typeof(GlassTint).GetField("motion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tint);
+                button.BackColor = Glass.Accent;
+                if (GlassMotion.AnimationsEnabled())
+                {
+                    WaitFor(() => motion.Value > .1);
+                    Color intermediate = ButtonPixel(button);
+                    Check(intermediate.B != normal.B && intermediate.R > Glass.Accent.R + 20, "navigation selection blends through intermediate colors");
+                }
+                WaitFor(() => !motion.Running);
+                Color selected = ButtonPixel(button);
+                Check(selected.R < 90 && selected.B > 190, "selected button settles to the blue accent");
+                typeof(GlassButton).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(button, new object[] { new KeyEventArgs(Keys.Space) });
+                WaitFor(() => !motion.Running);
+                Color pressed = ButtonPixel(button);
+                Check(pressed.B < selected.B, "keyboard press gives visible button feedback");
+                typeof(GlassButton).GetMethod("OnKeyUp", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(button, new object[] { new KeyEventArgs(Keys.Space) });
+                WaitFor(() => !motion.Running);
+                Check(ButtonPixel(button).ToArgb() == selected.ToArgb(), "releasing a button restores its resting colors");
+            }
+        }
         [STAThread] private static int Main(string[] args)
         {
             try
@@ -156,6 +275,8 @@ namespace LaunchHere
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 string folder = Path.GetFullPath(args[0]); Directory.CreateDirectory(folder);
+                CheckMotion();
+                CheckButtonMotion();
                 CheckClippedPainting(new GlassToggle());
                 CheckClippedPainting(new GlassButton());
                 CheckClippedPainting(new DisplayMap());
@@ -201,11 +322,26 @@ namespace LaunchHere
                     window.DpiChanged += delegate(object sender, DpiChangedEventArgs e) { Console.WriteLine("DPI transition " + e.DeviceDpiOld + " -> " + e.DeviceDpiNew); };
                     var tabs = Find<SettingsPages>(window, "Settings pages");
                     Check(window.Visible && tabs.TabCount == 3, "settings window opens with three pages");
+                    tabs.SelectedIndex = 1; tabs.SelectedIndex = 2; tabs.SelectedIndex = 0;
+                    var pageMotion = (GlassMotion)typeof(SettingsPages).GetField("pageMotion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tabs);
+                    WaitFor(() => !pageMotion.Running);
+                    Check(tabs.SelectedIndex == 0 && Find<CheckBox>(window, "Enable monitor routing").Visible, "rapid page changes finish on the requested page");
+                    tabs.SelectedIndex = 1; window.Hide();
+                    Check(!pageMotion.Running, "hiding settings stops page transitions");
+                    window.Show(); tabs.SelectedIndex = 0;
+                    window.ClientSize = new Size(window.ClientSize.Width - 10, window.ClientSize.Height - 10);
+                    Check(!pageMotion.Running, "resizing during a page transition restores the normal layout");
+                    var firstPageButton = Find<Button>(tabs, "Settings page"); firstPageButton.Focus();
+                    typeof(GlassButton).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(firstPageButton, new object[] { new KeyEventArgs(Keys.Right) });
+                    Check(tabs.SelectedIndex == 1 && Find<Button>(tabs, "App exceptions page").Focused, "keyboard page navigation moves focus immediately");
+                    tabs.SelectedIndex = 0; WaitFor(() => !pageMotion.Running);
                     Check(window.Text == "LaunchHere", "window uses LaunchHere branding");
                     var enable = Find<CheckBox>(window, "Enable monitor routing");
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
                     Check(app.Settings.Enabled && store.Load(out notice).Enabled, "enable control saves and updates engine");
+                    enable.Checked = false; CheckScrollColors(window);
+                    enable.Checked = true; CheckScrollColors(window);
                     var early = Find<CheckBox>(window, "Position new windows early");
                     Check(early.Checked, "early positioning enabled for existing preferences");
                     early.Checked = false;
