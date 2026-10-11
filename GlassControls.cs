@@ -9,15 +9,21 @@ namespace LaunchHere
 {
     internal static class Glass
     {
-        internal static readonly Color Ink = Color.FromArgb(24, 40, 66);
-        internal static readonly Color Muted = Color.FromArgb(79, 97, 122);
+        internal static readonly Color Ink = Color.FromArgb(232, 240, 250);
+        internal static readonly Color Muted = Color.FromArgb(163, 180, 203);
         internal static readonly Color Accent = Color.FromArgb(45, 101, 219);
-        internal static readonly Color Canvas = Color.FromArgb(235, 242, 252);
-        internal static readonly Color CanvasTop = Color.FromArgb(232, 243, 255);
-        internal static readonly Color CanvasBottom = Color.FromArgb(231, 233, 250);
-        internal static readonly Color CardTop = Color.FromArgb(235, 255, 255, 255);
-        internal static readonly Color CardBottom = Color.FromArgb(195, 246, 249, 255);
-        internal static readonly Color Border = Color.FromArgb(55, 111, 141, 186);
+        internal static readonly Color Cyan = Color.FromArgb(103, 224, 230);
+        internal static readonly Color Canvas = Color.FromArgb(12, 19, 31);
+        internal static readonly Color CanvasTop = Color.FromArgb(15, 25, 41);
+        internal static readonly Color CanvasBottom = Color.FromArgb(10, 16, 27);
+        internal static readonly Color CardTop = Color.FromArgb(245, 25, 37, 56);
+        internal static readonly Color CardBottom = Color.FromArgb(235, 19, 29, 46);
+        internal static readonly Color Input = Color.FromArgb(14, 23, 37);
+        internal static readonly Color ButtonTop = Color.FromArgb(34, 49, 71);
+        internal static readonly Color ButtonBottom = Color.FromArgb(25, 38, 57);
+        internal static readonly Color Disabled = Color.FromArgb(112, 130, 154);
+        internal static readonly Color Track = Color.FromArgb(48, 65, 88);
+        internal static readonly Color Border = Color.FromArgb(110, 73, 98, 132);
         // Transparent child controls repaint with a translated, clipped Graphics.
         // TextRenderer must preserve both or text can leak into sibling controls.
         internal const TextFormatFlags PaintText = TextFormatFlags.PreserveGraphicsClipping | TextFormatFlags.PreserveGraphicsTranslateTransform;
@@ -46,7 +52,7 @@ namespace LaunchHere
             var rect = new RectangleF(bounds.X + 1, bounds.Y + 1, bounds.Width - 3, bounds.Height - 3);
             using (var path = Rounded(rect, radius))
             using (var gradient = new LinearGradientBrush(rect, top, bottom, 80F))
-            using (var rim = new Pen(Color.FromArgb(235, 255, 255, 255), 1.3F))
+            using (var rim = new Pen(Color.FromArgb(24, 156, 204, 245), 1F))
             using (var edge = new Pen(Border, 1F))
             {
                 graphics.FillPath(gradient, path);
@@ -63,7 +69,7 @@ namespace LaunchHere
             using (var path = new GraphicsPath())
             {
                 path.AddEllipse(orb);
-                using (var glow = new PathGradientBrush(path) { CenterColor = Color.FromArgb(120, 255, 255, 255), SurroundColors = new[] { Color.FromArgb(0, 255, 255, 255) } }) graphics.FillPath(glow, path);
+                using (var glow = new PathGradientBrush(path) { CenterColor = Color.FromArgb(32, 57, 145, 203), SurroundColors = new[] { Color.FromArgb(0, 57, 145, 203) } }) graphics.FillPath(glow, path);
             }
         }
         internal static void ParentBackground(Graphics graphics, Control control)
@@ -251,7 +257,7 @@ namespace LaunchHere
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            tint = new GlassTint(this, Color.FromArgb(248, 252, 255), Color.FromArgb(232, 240, 252), ForeColor);
+            tint = new GlassTint(this, Glass.ButtonTop, Glass.ButtonBottom, ForeColor);
             depression = new GlassMotion(this, 0, Invalidate);
             RefreshTint();
         }
@@ -259,11 +265,11 @@ namespace LaunchHere
         {
             if (tint == null) return;
             bool primary = BackColor == Glass.Accent;
-            Color top = primary ? (hover ? Color.FromArgb(75, 131, 245) : Color.FromArgb(66, 121, 237)) : hover ? Color.White : Color.FromArgb(248, 252, 255);
-            Color bottom = primary ? Glass.Accent : Color.FromArgb(232, 240, 252);
-            if (pressed && Enabled) { top = Glass.Mix(top, Glass.Ink, .12); bottom = Glass.Mix(bottom, Glass.Ink, .12); }
-            if (!Enabled) { top = Color.FromArgb(235, 240, 248); bottom = top; }
-            tint.Set(top, bottom, !Enabled ? Glass.Muted : primary ? Color.White : ForeColor);
+            Color top = primary ? (hover ? Color.FromArgb(66, 126, 235) : Color.FromArgb(53, 112, 228)) : hover ? Color.FromArgb(44, 66, 92) : Glass.ButtonTop;
+            Color bottom = primary ? Glass.Accent : Glass.ButtonBottom;
+            if (pressed && Enabled) { top = Glass.Mix(top, Color.Black, .16); bottom = Glass.Mix(bottom, Color.Black, .16); }
+            if (!Enabled) { top = Color.FromArgb(22, 33, 49); bottom = top; }
+            tint.Set(top, bottom, !Enabled ? Glass.Disabled : primary ? Color.White : ForeColor);
         }
         private void SetPressed(bool value)
         {
@@ -331,9 +337,9 @@ namespace LaunchHere
             var track = new RectangleF(1, (Height - 22 * scale) / 2, 38 * scale, 22 * scale);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using (var path = Glass.Rounded(track, 11 * scale))
-            using (var fill = new SolidBrush(Glass.Mix(Color.FromArgb(187, 202, 226), Glass.Accent, Enabled ? position.Value : 0))) e.Graphics.FillPath(fill, path);
+            using (var fill = new SolidBrush(Glass.Mix(Glass.Track, Glass.Accent, Enabled ? position.Value : 0))) e.Graphics.FillPath(fill, path);
             using (var knob = new SolidBrush(Color.White)) e.Graphics.FillEllipse(knob, track.Left + (float)(3 + 16 * position.Value) * scale, track.Top + 3 * scale, 16 * scale, 16 * scale);
-            TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle((int)(49 * scale), 0, Math.Max(1, Width - (int)(49 * scale)), Height), Enabled ? ForeColor : Glass.Muted,
+            TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle((int)(49 * scale), 0, Math.Max(1, Width - (int)(49 * scale)), Height), Enabled ? ForeColor : Glass.Disabled,
                 Glass.PaintText | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -1, -1));
         }
@@ -344,9 +350,9 @@ namespace LaunchHere
         internal GlassBadge()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
-            tint = new GlassTint(this, Color.FromArgb(245, 251, 255), BackColor, ForeColor);
+            tint = new GlassTint(this, Glass.ButtonTop, BackColor, ForeColor);
         }
-        private void RefreshTint() { if (tint != null) tint.Set(Color.FromArgb(245, 251, 255), BackColor, ForeColor); }
+        private void RefreshTint() { if (tint != null) tint.Set(Glass.ButtonTop, BackColor, ForeColor); }
         protected override void OnBackColorChanged(EventArgs e) { RefreshTint(); base.OnBackColorChanged(e); }
         protected override void OnForeColorChanged(EventArgs e) { RefreshTint(); base.OnForeColorChanged(e); }
         protected override void Dispose(bool disposing) { if (disposing && tint != null) tint.Dispose(); base.Dispose(disposing); }
@@ -382,8 +388,9 @@ namespace LaunchHere
         protected override void WndProc(ref Message message)
         {
             base.WndProc(ref message);
+            if (message.Msg == 0x317 && (message.LParam.ToInt64() & 2) != 0) PaintScrollBar(message.WParam);
             // Keep Windows' scrolling, keyboard input and accessibility; only
-            // recolor its nonclient scrollbar to match this light surface.
+            // recolor its nonclient scrollbar to match the surrounding surface.
             switch (message.Msg)
             {
                 case 0x85: case 0xF: case 0x5: case 0x115: case 0x20A:
@@ -391,14 +398,14 @@ namespace LaunchHere
                     PaintScrollBar(); break;
             }
         }
-        private void PaintScrollBar()
+        private void PaintScrollBar(IntPtr paintDc = default(IntPtr))
         {
             if (SystemInformation.HighContrast || !IsHandleCreated || !VerticalScroll.Visible) return;
             int width = Width - ClientSize.Width;
             if (width <= 0 || Height < 2) return;
             var info = new ScrollInfo { size = Marshal.SizeOf(typeof(ScrollInfo)), mask = 7 };
             if (!GetScrollInfo(Handle, 1, ref info)) return;
-            IntPtr dc = GetWindowDC(Handle);
+            IntPtr dc = paintDc == IntPtr.Zero ? GetWindowDC(Handle) : paintDc;
             if (dc == IntPtr.Zero) return;
             try
             {
@@ -424,7 +431,125 @@ namespace LaunchHere
                     }
                 }
             }
-            finally { ReleaseDC(Handle, dc); }
+            finally { if (paintDc == IntPtr.Zero) ReleaseDC(Handle, dc); }
+        }
+    }
+    internal sealed class AsciiSignal : Control
+    {
+        private readonly Timer animation;
+        private readonly Stopwatch clock = new Stopwatch();
+        private readonly GlassMotion pulse;
+        private readonly Font glyphFont = new Font("Consolas", 9F, FontStyle.Regular, GraphicsUnit.Pixel);
+        private Form host;
+        private bool hostActive;
+        private Point pointer = new Point(-100, -100);
+        private int page;
+        private bool routing = true;
+        internal bool Running { get { return animation != null && animation.Enabled; } }
+        internal bool RoutingEnabled
+        {
+            get { return routing; }
+            set { if (routing == value) return; routing = value; SyncAnimation(); Invalidate(); }
+        }
+        internal AsciiSignal()
+        {
+            TabStop = false;
+            AccessibleRole = AccessibleRole.Graphic;
+            AccessibleDescription = "Decorative ASCII display link. Animations follow Windows settings.";
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
+            pulse = new GlassMotion(this, 0, Invalidate);
+            animation = new Timer { Interval = 40 };
+            animation.Tick += delegate { SyncAnimation(); if (Running) Invalidate(); };
+        }
+        internal void React(int selectedPage)
+        {
+            page = selectedPage;
+            pulse.Snap(1); pulse.MoveTo(0, 650); Invalidate();
+        }
+        private void AttachHost()
+        {
+            Form next = FindForm();
+            if (host == next) return;
+            if (host != null) { host.Activated -= HostActivated; host.Deactivate -= HostDeactivated; host.VisibleChanged -= HostChanged; }
+            host = next;
+            hostActive = host != null && (Form.ActiveForm == host || host.ContainsFocus);
+            if (host != null) { host.Activated += HostActivated; host.Deactivate += HostDeactivated; host.VisibleChanged += HostChanged; }
+        }
+        private void HostChanged(object sender, EventArgs e) { SyncAnimation(); }
+        private void HostActivated(object sender, EventArgs e) { hostActive = true; SyncAnimation(); }
+        private void HostDeactivated(object sender, EventArgs e) { hostActive = false; SyncAnimation(); }
+        private void SyncAnimation()
+        {
+            if (animation == null) return;
+            bool active = !IsDisposed && IsHandleCreated && Visible && routing && host != null && host.Visible && host.WindowState != FormWindowState.Minimized && hostActive && GlassMotion.AnimationsEnabled();
+            if (active) { clock.Start(); animation.Start(); }
+            else { animation.Stop(); clock.Stop(); }
+        }
+        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); AttachHost(); SyncAnimation(); }
+        protected override void OnHandleDestroyed(EventArgs e) { if (animation != null) { animation.Stop(); clock.Stop(); } base.OnHandleDestroyed(e); }
+        protected override void OnVisibleChanged(EventArgs e) { base.OnVisibleChanged(e); AttachHost(); SyncAnimation(); }
+        protected override void OnMouseMove(MouseEventArgs e) { pointer = e.Location; if (GlassMotion.AnimationsEnabled()) Invalidate(); base.OnMouseMove(e); }
+        protected override void OnMouseLeave(EventArgs e) { pointer = new Point(-100, -100); Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Glass.ParentBackground(e.Graphics, this);
+            if (Width < 2 || Height < 2) return;
+            if (SystemInformation.HighContrast)
+            {
+                TextRenderer.DrawText(e.Graphics, "[ DISPLAY ] -> [ DISPLAY ]", Font, ClientRectangle, SystemColors.ControlText,
+                    Glass.PaintText | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                return;
+            }
+            Glass.Surface(e.Graphics, ClientRectangle, Color.FromArgb(18, 34, 51), Glass.Input, 14 * DeviceDpi / 96F);
+            var state = e.Graphics.Save();
+            try
+            {
+                float scale = DeviceDpi / 96F;
+                e.Graphics.ScaleTransform(scale, scale);
+                float width = Width / scale, height = Height / scale;
+                float xOffset = (width - 30 * 5.4F) / 2, yOffset = Math.Max(23, (height - 62) / 2 + 9);
+                Color accent = routing ? Glass.Cyan : Color.FromArgb(252, 198, 113);
+                using (var brush = new SolidBrush(accent))
+                    e.Graphics.DrawString(routing ? "DISPLAY LINK" : "ROUTING PAUSED", glyphFont, brush, 12, 8, StringFormat.GenericTypographic);
+                string[] lines = { " .--------.        .--------. ", " |        |        |        | ", " |        |  --->  |        | ", " |        |        |        | ", " '--------'        '--------' ", "    _||_              _||_    " };
+                double phase = GlassMotion.AnimationsEnabled() ? clock.Elapsed.TotalSeconds : 0;
+                for (int row = 0; row < lines.Length; row++)
+                for (int col = 0; col < lines[row].Length; col++)
+                {
+                    char glyph = lines[row][col];
+                    double light = .25;
+                    bool display = row >= 1 && row <= 3 && ((col >= 2 && col <= 9) || (col >= 20 && col <= 27));
+                    if (display)
+                    {
+                        double distance = Math.Sqrt(Math.Pow(col * 5.4 + xOffset - pointer.X / scale, 2) + Math.Pow(row * 10 + yOffset - pointer.Y / scale, 2));
+                        double wave = (Math.Sin(col * .6 + row * .85 - phase * 2.2 + page * .8) + 1) / 2;
+                        light = Math.Min(1, wave * .7 + Math.Max(0, 1 - distance / 60) * .5 + pulse.Value * .3);
+                        glyph = ".:-=+*#"[(int)Math.Round(light * 6)];
+                    }
+                    else if (row == 2 && col >= 12 && col <= 17)
+                    {
+                        int packet = (int)(phase * 4) % 6;
+                        if (page == 1) packet = 5 - packet;
+                        glyph = routing ? col == 12 + packet ? (page == 1 ? '<' : '>') : '.' : '-';
+                        light = col == 12 + packet ? 1 : .2;
+                    }
+                    if (glyph == ' ') continue;
+                    using (var brush = new SolidBrush(Glass.Mix(Color.FromArgb(93, 125, 157), accent, light)))
+                        e.Graphics.DrawString(glyph.ToString(), glyphFont, brush, xOffset + col * 5.4F, yOffset + row * 10, StringFormat.GenericTypographic);
+                }
+            }
+            finally { e.Graphics.Restore(state); }
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (animation != null) animation.Dispose();
+                if (pulse != null) pulse.Dispose();
+                clock.Stop(); glyphFont.Dispose();
+                if (host != null) { host.Activated -= HostActivated; host.Deactivate -= HostDeactivated; host.VisibleChanged -= HostChanged; host = null; }
+            }
+            base.Dispose(disposing);
         }
     }
     internal sealed class GlassNumber : NumericUpDown
@@ -471,9 +596,9 @@ namespace LaunchHere
                     using (var graphics = Graphics.FromHdc(dc))
                     {
                         graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                        using (var fill = new SolidBrush(Color.FromArgb(239, 245, 255))) graphics.FillRectangle(fill, button.ClientRectangle);
+                        using (var fill = new SolidBrush(Glass.ButtonBottom)) graphics.FillRectangle(fill, button.ClientRectangle);
                         float middle = button.Height / 2F, center = button.Width / 2F, delta = 3 * button.DeviceDpi / 96F;
-                        using (var divider = new Pen(Color.FromArgb(218, 228, 244)))
+                        using (var divider = new Pen(Color.FromArgb(49, 70, 100)))
                         {
                             graphics.DrawLine(divider, 0, 0, 0, button.Height);
                             graphics.DrawLine(divider, 0, middle, button.Width, middle);
