@@ -97,7 +97,15 @@ namespace LaunchHere
                     {
                         graphics.CopyFromScreen(point, Point.Empty, new Size(1, 1));
                         Color pixel = image.GetPixel(0, 0);
-                        Check(pixel.R > 150 && pixel.G > 150 && pixel.B > 150, "native scrollbar keeps the light palette after a setting changes");
+                        Color expected;
+                        using (var reference = new Bitmap(1, 1))
+                        using (var background = Graphics.FromImage(reference))
+                        {
+                            var local = flow.PointToClient(point);
+                            background.TranslateTransform(-local.X, -local.Y);
+                            Glass.ParentBackground(background, flow); expected = reference.GetPixel(0, 0);
+                        }
+                        Check(Math.Abs(pixel.R - expected.R) <= 6 && Math.Abs(pixel.G - expected.G) <= 6 && Math.Abs(pixel.B - expected.B) <= 6, "native scrollbar matches the theme after a setting changes");
                     }
                 }
                 CheckScrollColors(child);
@@ -247,17 +255,18 @@ namespace LaunchHere
             {
                 form.Controls.Add(button); form.Show(); Application.DoEvents();
                 Color normal = ButtonPixel(button);
+                Color? intermediate = null;
                 var tint = (GlassTint)typeof(GlassButton).GetField("tint", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(button);
                 var motion = (GlassMotion)typeof(GlassTint).GetField("motion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tint);
                 button.BackColor = Glass.Accent;
                 if (GlassMotion.AnimationsEnabled())
                 {
                     WaitFor(() => motion.Value > .1);
-                    Color intermediate = ButtonPixel(button);
-                    Check(intermediate.B != normal.B && intermediate.R > Glass.Accent.R + 20, "navigation selection blends through intermediate colors");
+                    intermediate = ButtonPixel(button);
                 }
                 WaitFor(() => !motion.Running);
                 Color selected = ButtonPixel(button);
+                if (intermediate.HasValue) Check(intermediate.Value.ToArgb() != normal.ToArgb() && intermediate.Value.ToArgb() != selected.ToArgb(), "navigation selection blends through intermediate colors");
                 Check(selected.R < 90 && selected.B > 190, "selected button settles to the blue accent");
                 typeof(GlassButton).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(button, new object[] { new KeyEventArgs(Keys.Space) });
                 WaitFor(() => !motion.Running);
@@ -324,10 +333,13 @@ namespace LaunchHere
                     Check(window.Visible && tabs.TabCount == 3, "settings window opens with three pages");
                     tabs.SelectedIndex = 1; tabs.SelectedIndex = 2; tabs.SelectedIndex = 0;
                     var pageMotion = (GlassMotion)typeof(SettingsPages).GetField("pageMotion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tabs);
+                    var blend = (PageBlend)typeof(SettingsPages).GetField("blend", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tabs);
                     WaitFor(() => !pageMotion.Running);
+                    Check(!blend.Visible && !blend.HasFrames, "settled transitions release page snapshots");
                     Check(tabs.SelectedIndex == 0 && Find<CheckBox>(window, "Enable monitor routing").Visible, "rapid page changes finish on the requested page");
                     tabs.SelectedIndex = 1; window.Hide();
                     Check(!pageMotion.Running, "hiding settings stops page transitions");
+                    Check(!blend.HasFrames, "hiding settings releases page snapshots");
                     window.Show(); tabs.SelectedIndex = 0;
                     window.ClientSize = new Size(window.ClientSize.Width - 10, window.ClientSize.Height - 10);
                     Check(!pageMotion.Running, "resizing during a page transition restores the normal layout");
@@ -337,8 +349,12 @@ namespace LaunchHere
                     tabs.SelectedIndex = 0; WaitFor(() => !pageMotion.Running);
                     Check(window.Text == "LaunchHere", "window uses LaunchHere branding");
                     var enable = Find<CheckBox>(window, "Enable monitor routing");
+                    var signal = Find<AsciiSignal>(window, "Animated display link");
+                    Check(signal != null && !signal.TabStop && !signal.Running, "paused routing keeps decorative ASCII animation idle");
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
+                    Application.DoEvents();
+                    Check(signal.Running == GlassMotion.AnimationsEnabled(), "ASCII display animation follows Windows motion preferences");
                     Check(app.Settings.Enabled && store.Load(out notice).Enabled, "enable control saves and updates engine");
                     enable.Checked = false; CheckScrollColors(window);
                     enable.Checked = true; CheckScrollColors(window);
@@ -360,6 +376,13 @@ namespace LaunchHere
                     CheckNativeScrolling(window);
                     tabs.SelectedIndex = 1; Application.DoEvents();
                     var input = Find<TextBox>(window, "App process name, for example game.exe");
+                    if (GlassMotion.AnimationsEnabled() && pageMotion.Running)
+                    {
+                        Check(blend.Visible && blend.HasFrames, "page changes draw a composited transition");
+                        Check(SendMessage(blend.Handle, 0x84, IntPtr.Zero, IntPtr.Zero) == new IntPtr(-1), "transition overlay allows pointer input through to the real page");
+                        Message key = Message.Create(input.Handle, 0x100, new IntPtr((int)Keys.A), IntPtr.Zero);
+                        Check(!tabs.PreFilterMessage(ref key) && !pageMotion.Running && !blend.HasFrames, "first page input finishes the transition without consuming the input");
+                    }
                     input.Text = "game.exe"; FindButton(window, "&Add").PerformClick();
                     Check(app.Settings.IsExcluded("GAME") && store.Load(out notice).IsExcluded("game"), "exception control saves normalized process name");
                     input.Text = "GAME.exe"; FindButton(window, "&Add").PerformClick();
@@ -369,6 +392,7 @@ namespace LaunchHere
                     Find<ListBox>(window, "Excluded apps").SelectedIndex = 0; FindButton(window, "&Remove selected").PerformClick();
                     Check(app.Settings.ExcludedApps.Count == 0 && store.Load(out notice).ExcludedApps.Count == 0, "remove exception saves");
                     window.Hide(); request.Set();
+                    Check(!signal.Running, "ASCII animation stops immediately when settings hide to the tray");
                     typeof(TrayApp).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(app, new object[] { null, EventArgs.Empty });
                     Check(window.Visible, "existing-instance request reopens settings");
                     input.Clear();
