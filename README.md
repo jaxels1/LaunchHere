@@ -37,7 +37,7 @@ To update or uninstall, quit LaunchHere first. Run a newer installer to update, 
 
 ## Settings
 
-You can pause LaunchHere, start it with Windows, adjust how long it waits for an app to open, and choose apps it should leave alone. Your settings save automatically. Use **Identify displays** to see the display numbers, or export and import a local settings backup.
+You can pause LaunchHere, start it with Windows, adjust how long it waits for an app to open, and choose apps it should leave alone. **Position new windows early** is on by default: LaunchHere tries to place new windows while they are still hidden, then checks their position when they appear. Turn it off if an app behaves unexpectedly. Your settings save automatically. Use **Identify displays** to see the display numbers, or export and import a local settings backup.
 
 ## Updates and privacy
 
@@ -55,7 +55,7 @@ Windows 10 or 11, 64-bit, with .NET Framework 4.8.
 
 ## Things to know
 
-Apps might briefly appear on their old monitor before moving. Some games, slow launches, and apps running as administrator may need to be moved manually. Occasionally, an unrelated app opening just after a taskbar click can get moved too.
+Early positioning reduces the flash on the old monitor, but it cannot guarantee that every app appears directly on the chosen display. Windows sends window notifications asynchronously, and some apps set their own position afterward. Windows that start maximized use the faster after-show path and can still briefly appear on the old monitor. Some games, slow launches, and apps running as administrator may need to be moved manually. Occasionally, an unrelated app opening just after a taskbar click can get moved too.
 
 ## Building from source
 
@@ -85,6 +85,6 @@ Installer and update handoff checks are in `Tests/InstallerChecks.ps1` and `Test
 
 ## Publishing a release
 
-Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.0.1` and attach the generated installer and portable ZIP.
+Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.1` and attach the generated installer and portable ZIP.
 
-Keep the generated filenames: `LaunchHere-2.0.1-Setup-x64.exe` and `LaunchHere-2.0.1-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.
+Keep the generated filenames: `LaunchHere-2.1-Setup-x64.exe` and `LaunchHere-2.1-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.

@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -60,7 +61,8 @@ namespace LaunchHere
         private readonly System.Windows.Forms.Timer timer;
         private readonly Native.MouseProc mouseProc;
         private readonly Native.EventProc eventProc;
-        private IntPtr mouseHook, foregroundHook, restoreHook;
+        private IntPtr mouseHook, foregroundHook, restoreHook, creationHook;
+        private readonly HashSet<IntPtr> createdWindows = new HashSet<IntPtr>();
         private readonly ToolStripMenuItem enabledItem, startupItem;
         private readonly SettingsStore store;
         private readonly EventWaitHandle openRequest;
@@ -111,7 +113,8 @@ namespace LaunchHere
                 mouseHook = Native.SetWindowsHookEx(14, mouseProc, Native.GetModuleHandle(null), 0);
                 foregroundHook = Native.SetWinEventHook(3, 3, IntPtr.Zero, eventProc, 0, 0, 2);
                 restoreHook = Native.SetWinEventHook(0x16, 0x17, IntPtr.Zero, eventProc, 0, 0, 2);
-                if (mouseHook == IntPtr.Zero || foregroundHook == IntPtr.Zero || restoreHook == IntPtr.Zero)
+                creationHook = Native.SetWinEventHook(0x8000, 0x8002, IntPtr.Zero, eventProc, 0, 0, 2);
+                if (mouseHook == IntPtr.Zero || foregroundHook == IntPtr.Zero || restoreHook == IntPtr.Zero || creationHook == IntPtr.Zero)
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows could not register the mouse/window hooks.");
                 timer = new System.Windows.Forms.Timer { Interval = 100 };
                 timer.Tick += Tick;
@@ -200,7 +203,11 @@ namespace LaunchHere
             }
         }
 
-        private void Cancel() { targetDevice = null; candidate = IntPtr.Zero; clickForeground = IntPtr.Zero; generation++; }
+        private void Cancel()
+        {
+            targetDevice = null; candidate = IntPtr.Zero; clickForeground = IntPtr.Zero; createdWindows.Clear(); generation++;
+            if (timer != null && !disposed) timer.Interval = 100;
+        }
         internal void BeginRouting(string device, uint time, IntPtr foreground)
         {
             Cancel();
@@ -209,6 +216,7 @@ namespace LaunchHere
             // Clicking the active taskbar button minimizes that window. Remember
             // it so the window revealed underneath cannot become our candidate.
             clickForeground = foreground;
+            if (timer != null) timer.Interval = 16;
         }
         private bool ClickMinimizedForeground()
         {
@@ -249,7 +257,7 @@ namespace LaunchHere
         {
             try
             {
-                if (verify || !Settings.Enabled || targetDevice == null || hwnd == IntPtr.Zero) return;
+                if (disposed || verify || !Settings.Enabled || targetDevice == null || hwnd == IntPtr.Zero) return;
                 // MINIMIZESTART can arrive before or after the foreground event.
                 // Cancel either way, before the delayed movement can run.
                 if (eventId == 0x16)
@@ -261,19 +269,51 @@ namespace LaunchHere
                 // Unsigned subtraction handles the system tick counter wrapping after 49 days.
                 uint timeout = (uint)Settings.LaunchTimeoutSeconds * 1000;
                 if (unchecked(time - clickTime) > timeout || unchecked((uint)Environment.TickCount - clickTime) > timeout) return;
+                if (eventId >= 0x8000 && eventId <= 0x8002)
+                {
+                    // Object events also describe menus and individual controls.
+                    // Only newly created, unowned top-level app windows qualify.
+                    if (objectId != 0 || childId != 0 || !Settings.EarlyPositioning) return;
+                    if (eventId == 0x8001)
+                    {
+                        createdWindows.Remove(hwnd);
+                        if (candidate == hwnd) Cancel();
+                        return;
+                    }
+                    if (eventId == 0x8000)
+                    {
+                        if (createdWindows.Count >= 16 || Native.GetAncestor(hwnd, 2) != hwnd || Native.GetWindow(hwnd, 4) != IntPtr.Zero) return;
+                        createdWindows.Add(hwnd);
+                    }
+                    if (!createdWindows.Contains(hwnd) || hwnd == clickForeground || candidate != IntPtr.Zero && candidate != hwnd) return;
+                    if (!Eligible(hwnd, true) || (Native.GetWindowLongPtr(hwnd, -16).ToInt64() & 0x00C00000) != 0x00C00000) return;
+                    Native.Rect bounds;
+                    if (!Native.GetWindowRect(hwnd, out bounds) || bounds.right <= bounds.left || bounds.bottom <= bounds.top) return;
+                    Screen earlyTarget = TargetScreen();
+                    if (earlyTarget == null) { Cancel(); return; }
+                    // Does not show or activate the window. Recheck at SHOW because
+                    // apps may reapply their saved placement after CREATE.
+                    Move(hwnd, earlyTarget);
+                    return;
+                }
+                if (eventId != 3 && eventId != 0x17) return;
                 if (!Eligible(hwnd)) return;
                 if (candidate != IntPtr.Zero) return;
                 candidate = hwnd;
                 candidateGeneration = generation;
                 movePass = 0;
-                moveAt = clock.ElapsedMilliseconds + 150;
+                // Existing-window activations retain a short minimize guard.
+                // Fresh windows and restores can take the fast path immediately.
+                bool immediate = eventId == 0x17 || Settings.EarlyPositioning && createdWindows.Contains(hwnd);
+                moveAt = clock.ElapsedMilliseconds + (immediate ? 0 : 35);
+                if (immediate && Native.GetForegroundWindow() == hwnd) Tick(null, EventArgs.Empty);
             }
             catch { Cancel(); }
         }
 
-        private bool Eligible(IntPtr hwnd)
+        private bool Eligible(IntPtr hwnd, bool allowHidden = false)
         {
-            if (!Native.IsWindowVisible(hwnd) || Native.GetAncestor(hwnd, 2) != hwnd) return false;
+            if ((!allowHidden && !Native.IsWindowVisible(hwnd)) || Native.GetAncestor(hwnd, 2) != hwnd) return false;
             long ex = Native.GetWindowLongPtr(hwnd, -20).ToInt64();
             if ((ex & 0x80) != 0 || (ex & 0x08000000) != 0) return false;
             string cls = Native.ClassName(hwnd);
@@ -303,8 +343,7 @@ namespace LaunchHere
             if (unchecked((uint)Environment.TickCount - clickTime) > (uint)Settings.LaunchTimeoutSeconds * 1000) { Cancel(); return; }
             if (candidate == IntPtr.Zero || clock.ElapsedMilliseconds < moveAt) return;
             if (candidateGeneration != generation || Native.GetForegroundWindow() != candidate) { Cancel(); return; }
-            Screen target = null;
-            foreach (var screen in Screen.AllScreens) if (screen.DeviceName == targetDevice) target = screen;
+            Screen target = TargetScreen();
             if (target == null) { Cancel(); return; }
             try { Move(candidate, target); }
             catch { Cancel(); return; }
@@ -312,6 +351,12 @@ namespace LaunchHere
             // Stop immediately if the user clicks elsewhere or changes focus.
             if (++movePass >= (Settings.RetryMovement ? 3 : 1)) Cancel();
             else moveAt = clock.ElapsedMilliseconds + (movePass == 1 ? 350 : 600);
+        }
+
+        private Screen TargetScreen()
+        {
+            foreach (var screen in Screen.AllScreens) if (screen.DeviceName == targetDevice) return screen;
+            return null;
         }
 
         private static void Move(IntPtr hwnd, Screen target)
@@ -324,6 +369,10 @@ namespace LaunchHere
             Rectangle original;
             if (Native.IsZoomed(hwnd))
             {
+                // SetWindowPlacement changes visibility. Never enqueue HIDE for
+                // a hidden window: its app could SHOW before that request runs.
+                // The SHOW callback will route this case as soon as it is visible.
+                if (!Native.IsWindowVisible(hwnd)) return;
                 // WINDOWPLACEMENT uses workspace coordinates for regular top-level windows.
                 original = placement.normal.ToRectangle();
                 original.Offset(source.WorkingArea.Left - source.Bounds.Left, source.WorkingArea.Top - source.Bounds.Top);
@@ -331,8 +380,9 @@ namespace LaunchHere
                 moved.Offset(target.Bounds.Left - target.WorkingArea.Left, target.Bounds.Top - target.WorkingArea.Top);
                 placement.normal = Native.Rect.FromRectangle(moved);
                 placement.flags = 4; // Async: do not block on another application's message loop.
-                // A maximized HWND can stay on its old monitor if only its restore
-                // rectangle changes. Restore at the new position before maximizing.
+                // Some frameworks cache restore bounds until a normal-size
+                // transition. Preserve the established restore/maximize path
+                // for already-visible windows so restoring stays on target.
                 placement.showCmd = 4;
                 Native.SetWindowPlacement(hwnd, ref placement);
                 placement.showCmd = 3;
@@ -355,6 +405,7 @@ namespace LaunchHere
             if (mouseHook != IntPtr.Zero) { Native.UnhookWindowsHookEx(mouseHook); mouseHook = IntPtr.Zero; }
             if (foregroundHook != IntPtr.Zero) { Native.UnhookWinEvent(foregroundHook); foregroundHook = IntPtr.Zero; }
             if (restoreHook != IntPtr.Zero) { Native.UnhookWinEvent(restoreHook); restoreHook = IntPtr.Zero; }
+            if (creationHook != IntPtr.Zero) { Native.UnhookWinEvent(creationHook); creationHook = IntPtr.Zero; }
             if (disposing)
             {
                 if (timer != null) timer.Dispose();
@@ -418,6 +469,7 @@ namespace LaunchHere
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr GetModuleHandle(string name);
         [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(Point point);
         [DllImport("user32.dll")] internal static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr hwnd, uint command);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder text, int max);
         internal static string ClassName(IntPtr hwnd) { var text = new StringBuilder(256); GetClassName(hwnd, text, text.Capacity); return text.ToString(); }
         [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();

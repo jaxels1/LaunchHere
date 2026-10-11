@@ -11,6 +11,7 @@ namespace LaunchHere
     internal sealed class AppSettings
     {
         [DataMember] internal bool Enabled = true;
+        [DataMember] internal bool EarlyPositioning = true;
         [DataMember] internal bool ThumbnailPreviews = true;
         [DataMember] internal bool RetryMovement = true;
         [DataMember] internal int LaunchTimeoutSeconds = 12;
@@ -20,6 +21,7 @@ namespace LaunchHere
         private void Defaults(StreamingContext context)
         {
             Enabled = true;
+            EarlyPositioning = true;
             ThumbnailPreviews = true;
             RetryMovement = true;
             LaunchTimeoutSeconds = 12;

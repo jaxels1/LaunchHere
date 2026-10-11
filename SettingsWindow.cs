@@ -17,7 +17,7 @@ namespace LaunchHere
         private readonly TrayApp app;
         private readonly SettingsPages tabs;
         private readonly Label badge, footer, startupHelp;
-        private readonly CheckBox enable, startup, previews, retries;
+        private readonly CheckBox enable, earlyPositioning, startup, previews, retries;
         private readonly NumericUpDown timeout;
         private readonly ListBox exclusions;
         private readonly TextBox processName;
@@ -80,6 +80,10 @@ namespace LaunchHere
             enable = Check("&Enable LaunchHere", "Enable monitor routing");
             generalFlow.Controls.Add(Row(enable, "Move app windows to the display whose taskbar you click."));
             enable.CheckedChanged += delegate { if (!syncing) app.ChangeSettings(s => s.Enabled = enable.Checked); };
+
+            earlyPositioning = Check("Position new windows &early", "Position new windows early");
+            generalFlow.Controls.Add(Row(earlyPositioning, "Position newly created windows before they appear when Windows allows it. Some apps can still briefly appear on their old display."));
+            earlyPositioning.CheckedChanged += delegate { if (!syncing) app.ChangeSettings(s => s.EarlyPositioning = earlyPositioning.Checked); };
 
             startup = Check("&Start with Windows", "Start with Windows");
             var startupRow = Row(startup, "Launch quietly in the tray when you sign in. Keep the app in a permanent folder.");
@@ -176,7 +180,7 @@ namespace LaunchHere
             aboutFlow.Controls.Add(updateCard);
             aboutFlow.Controls.Add(TextCard("Privacy", "Internet is used only when you press \"Check for updates\". That action contacts GitHub and its download servers to check and download a release. GitHub receives your IP address and the app version.\n\nNo accounts, analytics or background update checks. Preferences, app exceptions and window activity stay on your PC. Mouse click history and keystrokes are not recorded."));
             aboutFlow.Controls.Add(TextCard("Get started", "1. Show the taskbar on all displays in Windows taskbar settings.\n2. Click an app on your preferred display's taskbar.\n3. Close or minimize this window to keep the app running in the tray."));
-            aboutFlow.Controls.Add(TextCard("A few things to know", "Windows does not identify which app a taskbar click launches, so the utility uses the next eligible window activation. Unrelated apps activating soon afterward can sometimes be moved. Apps may briefly appear on their old display; slow launches, administrator apps, and exclusive fullscreen games may need manual movement."));
+            aboutFlow.Controls.Add(TextCard("A few things to know", "Windows does not identify which app a taskbar click launches, so LaunchHere watches new windows and the next eligible activation. Early positioning reduces the flash on the old display, but some apps can still briefly appear there. Unrelated apps opening soon afterward can sometimes be moved. Slow launches, administrator apps, and exclusive fullscreen games may need manual movement."));
 
             var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(24, 14, 24, 12), Margin = Padding.Empty, BackColor = Color.Transparent };
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -349,7 +353,7 @@ namespace LaunchHere
             var settings = new SettingsStore(path).Load(out notice);
             if (notice != null || !File.Exists(path)) throw new InvalidDataException("This file is not a valid LaunchHere settings backup.");
             app.ChangeSettings(s => {
-                s.Enabled = settings.Enabled; s.ThumbnailPreviews = settings.ThumbnailPreviews;
+                s.Enabled = settings.Enabled; s.EarlyPositioning = settings.EarlyPositioning; s.ThumbnailPreviews = settings.ThumbnailPreviews;
                 s.RetryMovement = settings.RetryMovement; s.LaunchTimeoutSeconds = settings.LaunchTimeoutSeconds;
                 s.ExcludedApps = new System.Collections.Generic.List<string>(settings.ExcludedApps);
             });
@@ -419,6 +423,7 @@ namespace LaunchHere
             try
             {
                 enable.Checked = app.Settings.Enabled;
+                earlyPositioning.Checked = app.Settings.EarlyPositioning;
                 startup.Checked = app.StartupEnabled;
                 startup.Enabled = app.StartupAvailable;
                 startupHelp.Text = !app.StartupAvailable ? "Windows has restricted startup settings for this account. The app still works when launched manually." : "Launch quietly in the tray when you sign in. Keep portable copies in a permanent folder.";
