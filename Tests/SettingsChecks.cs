@@ -284,7 +284,7 @@ namespace LaunchHere
                 WaitFor(() => !motion.Running);
                 Color selected = ButtonPixel(button);
                 if (intermediate.HasValue) Check(intermediate.Value.ToArgb() != normal.ToArgb() && intermediate.Value.ToArgb() != selected.ToArgb(), "navigation selection blends through intermediate colors");
-                Check(selected.B > selected.G && selected.R > selected.G && selected.R > 90, "selected button settles to the purple accent");
+                Check(selected.B > selected.G && selected.G > selected.R && selected.B > 90, "selected button settles to the muted blue accent");
                 typeof(GlassButton).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(button, new object[] { new KeyEventArgs(Keys.Space) });
                 WaitFor(() => !motion.Running);
                 Color pressed = ButtonPixel(button);
@@ -348,15 +348,17 @@ namespace LaunchHere
                     window.DpiChanged += delegate(object sender, DpiChangedEventArgs e) { Console.WriteLine("DPI transition " + e.DeviceDpiOld + " -> " + e.DeviceDpiNew); };
                     var tabs = Find<SettingsPages>(window, "Settings pages");
                     Check(window.Visible && tabs.TabCount == 3, "settings window opens with three pages");
+                    var content = (Panel)typeof(SettingsPages).GetField("content",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(tabs);
+                    Check(content.Height >= tabs.ClientSize.Height - 60 * window.DeviceDpi / 96, "page content fills the space below the compact navigation row");
                     tabs.SelectedIndex = 1; tabs.SelectedIndex = 2; tabs.SelectedIndex = 0;
                     var pageMotion = (GlassMotion)typeof(SettingsPages).GetField("pageMotion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tabs);
                     var blend = (PageBlend)typeof(SettingsPages).GetField("blend", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tabs);
                     WaitFor(() => !pageMotion.Running);
-                    Check(!blend.Visible && !blend.HasFrames, "settled transitions release page snapshots");
+                    Check(pageMotion.Value == 1, "tab indicator settles without page snapshots");
                     Check(tabs.SelectedIndex == 0 && Find<CheckBox>(window, "Enable monitor routing").Visible, "rapid page changes finish on the requested page");
                     tabs.SelectedIndex = 1; window.Hide();
                     Check(!pageMotion.Running, "hiding settings stops page transitions");
-                    Check(!blend.HasFrames, "hiding settings releases page snapshots");
+                    Check(pageMotion.Value == 1, "hiding settles the tab indicator");
                     window.Show(); tabs.SelectedIndex = 0;
                     window.ClientSize = new Size(window.ClientSize.Width - 10, window.ClientSize.Height - 10);
                     Check(!pageMotion.Running, "resizing during a page transition restores the normal layout");
@@ -416,6 +418,22 @@ namespace LaunchHere
                     var enable = Find<CheckBox>(window, "Enable monitor routing");
                     var scene = window.Scene;
                     WaitFor(() => !scene.Running); Check(!scene.Running, "chevron background rests when there is no interaction");
+                    Application.DoEvents();
+                    int cardPaints = 0, togglePaints = 0;
+                    var card = enable.Parent;
+                    while(card != null && !(card is GlassCard)) card = card.Parent;
+                    PaintEventHandler cardPaint = delegate { cardPaints++; }, togglePaint = delegate { togglePaints++; };
+                    card.Paint += cardPaint; enable.Paint += togglePaint;
+                    typeof(Form).GetMethod("OnActivated", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, new object[] { EventArgs.Empty });
+                    scene.MovePointer(new Point(120,450)); scene.Ripple(new Point(120,450));
+                    for(int frame=0;frame<5;frame++)
+                    {
+                        typeof(ChevronScene).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(scene,new object[] { null,EventArgs.Empty });
+                        Application.DoEvents(); Thread.Sleep(10);
+                    }
+                    card.Paint -= cardPaint; enable.Paint -= togglePaint;
+                    Check(cardPaints == 0 && togglePaints == 0, "background frames do not repaint cards or their interactive controls");
+                    typeof(Form).GetMethod("OnDeactivate", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, new object[] { EventArgs.Empty });
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
                     Application.DoEvents();
@@ -443,10 +461,10 @@ namespace LaunchHere
                     var input = Find<TextBox>(window, "App process name, for example game.exe");
                     if (GlassMotion.AnimationsEnabled() && pageMotion.Running)
                     {
-                        Check(blend.Visible && blend.HasFrames, "page changes draw a composited transition");
+                        Check(blend.Visible, "page changes animate a lightweight selection indicator");
                         Check(SendMessage(blend.Handle, 0x84, IntPtr.Zero, IntPtr.Zero) == new IntPtr(-1), "transition overlay allows pointer input through to the real page");
                         Message key = Message.Create(input.Handle, 0x100, new IntPtr((int)Keys.A), IntPtr.Zero);
-                        Check(!tabs.PreFilterMessage(ref key) && !pageMotion.Running && !blend.HasFrames, "first page input finishes the transition without consuming the input");
+                        Check(!tabs.PreFilterMessage(ref key) && input.Visible, "page input is immediately available during the selection animation");
                     }
                     input.Text = "game.exe"; FindButton(window, "&Add").PerformClick();
                     Check(app.Settings.IsExcluded("GAME") && store.Load(out notice).IsExcluded("game"), "exception control saves normalized process name");
