@@ -10,7 +10,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 Push-Location $sourceRoot
 try {
     $guiCheck = Join-Path $testOutput 'SettingsChecks.exe'
-    & $compiler /nologo /target:exe /platform:x64 /main:LaunchHere.SettingsChecks "/out:$guiCheck" /win32manifest:app.manifest /win32icon:LaunchHere.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll /reference:System.Net.Http.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll LaunchHere.cs Settings.cs SettingsWindow.cs GlassControls.cs Updates.cs UpdateFiles.cs UpdateRunner.cs AssemblyInfo.cs Tests\SettingsChecks.cs
+    & $compiler /nologo /target:exe /platform:x64 /main:LaunchHere.SettingsChecks "/out:$guiCheck" /win32manifest:app.manifest /win32icon:LaunchHere.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll /reference:System.Net.Http.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll LaunchHere.cs Settings.cs SettingsWindow.cs GlassControls.cs StudioControls.cs Updates.cs UpdateFiles.cs UpdateRunner.cs AssemblyInfo.cs Tests\SettingsChecks.cs
     if ($LASTEXITCODE -ne 0) { throw 'GUI test compilation failed.' }
     Copy-Item -LiteralPath 'LaunchHere.exe.config' -Destination ($guiCheck + '.config')
     $windowCheck = Join-Path $testOutput 'WindowChecks.exe'

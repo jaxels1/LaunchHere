@@ -63,6 +63,13 @@ class WindowChecks
                     };
 
                     armClick();
+                    type.GetField("targetProcess", Instance).SetValue(app, "different-pinned-executable");
+                    sendEvent(3, background);
+                    Check((IntPtr)candidate.GetValue(app) == IntPtr.Zero && pending.GetValue(app) != null, "pinned routing ignores an unrelated app activation on " + target.DeviceName);
+                    armClick();
+                    Check(type.GetField("targetProcess", Instance).GetValue(app) == null, "taskbar routing clears the pinned process filter on " + target.DeviceName);
+
+                    armClick();
                     ShowWindow(active, 6);
                     sendEvent(3, background);
                     Check(pending.GetValue(app) == null, "minimized active window cancels routing before foreground event on " + target.DeviceName);

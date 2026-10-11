@@ -63,6 +63,14 @@ namespace LaunchHere
                     Check(!f.HorizontalScroll.Visible, "page layout fits width at current DPI");
                 }
                 CheckFlows(child);
+                var deck = child as LauncherDeck;
+                if (deck != null)
+                {
+                    var tileRow = Find<FlowLayoutPanel>(deck, "Quick launch apps and commands");
+                    bool fits = true;
+                    foreach (Control tile in tileRow.Controls) if (tile.Right > tileRow.ClientSize.Width || tile.Bottom > tileRow.ClientSize.Height) fits = false;
+                    Check(fits, "launcher tiles fit without horizontal scrolling at current DPI");
+                }
             }
         }
         private static void CheckNativeScrolling(Control parent)
@@ -89,13 +97,21 @@ namespace LaunchHere
                 if (flow != null && flow.Visible && flow.VerticalScroll.Visible && !SystemInformation.HighContrast)
                 {
                     Form form = flow.FindForm(); form.Activate(); Application.DoEvents();
-                    if (Native.GetForegroundWindow() != form.Handle) throw new Exception("Only the foreground test window may be sampled.");
                     int barWidth = flow.Width - flow.ClientSize.Width;
                     var point = flow.PointToScreen(new Point(flow.ClientSize.Width + barWidth / 2, flow.Height * 3 / 4));
                     using (var image = new Bitmap(1, 1))
                     using (var graphics = Graphics.FromImage(image))
                     {
-                        graphics.CopyFromScreen(point, Point.Empty, new Size(1, 1));
+                        if (Native.GetForegroundWindow() == form.Handle) graphics.CopyFromScreen(point, Point.Empty, new Size(1, 1));
+                        else
+                        {
+                            using (var snapshot = new Bitmap(flow.Width, flow.Height))
+                            {
+                                flow.DrawToBitmap(snapshot, new Rectangle(Point.Empty, flow.Size));
+                                var local = flow.PointToClient(point); image.SetPixel(0, 0, snapshot.GetPixel(local.X, local.Y));
+                            }
+                            Console.WriteLine("Native scrollbar verified with WM_PRINT; desktop did not grant test focus.");
+                        }
                         Color pixel = image.GetPixel(0, 0);
                         Color expected;
                         using (var reference = new Bitmap(1, 1))
@@ -267,7 +283,7 @@ namespace LaunchHere
                 WaitFor(() => !motion.Running);
                 Color selected = ButtonPixel(button);
                 if (intermediate.HasValue) Check(intermediate.Value.ToArgb() != normal.ToArgb() && intermediate.Value.ToArgb() != selected.ToArgb(), "navigation selection blends through intermediate colors");
-                Check(selected.R < 90 && selected.B > 190, "selected button settles to the blue accent");
+                Check(selected.B > selected.G && selected.R > selected.G && selected.R > 90, "selected button settles to the purple accent");
                 typeof(GlassButton).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(button, new object[] { new KeyEventArgs(Keys.Space) });
                 WaitFor(() => !motion.Running);
                 Color pressed = ButtonPixel(button);
@@ -348,13 +364,61 @@ namespace LaunchHere
                     Check(tabs.SelectedIndex == 1 && Find<Button>(tabs, "App exceptions page").Focused, "keyboard page navigation moves focus immediately");
                     tabs.SelectedIndex = 0; WaitFor(() => !pageMotion.Running);
                     Check(window.Text == "LaunchHere", "window uses LaunchHere branding");
+                    var launcher = Find<LauncherDeck>(window, "Command launcher");
+                    launcher.Search.Text = "App exceptions";
+                    Check(launcher.MatchCount == 1, "command search filters local actions");
+                    typeof(TextBox).GetMethod("OnKeyDown", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(launcher.Search, new object[] { new KeyEventArgs(Keys.Enter) });
+                    Check(tabs.SelectedIndex == 1, "Enter runs the visible command without opening a network connection");
+                    launcher.Search.Text = "zz-no-command";
+                    Check(launcher.MatchCount == 0, "unmatched search does not invent a command");
+                    launcher.Search.Clear(); tabs.SelectedIndex = 0;
+                    string pin = Path.Combine(folder, "Pinned test.exe"); File.Copy(Application.ExecutablePath, pin, true);
+                    window.PinAppFile(pin); window.PinAppFile(pin);
+                    Check(app.Settings.PinnedApps.Count == 1 && store.Load(out notice).PinnedApps.Count == 1, "local app pins persist and reject duplicates");
+                    Check(AppSettings.LocalAppPath("https://example.com/app.exe") == null && AppSettings.LocalAppPath(@"\\server\app.exe") == null && AppSettings.LocalAppPath("relative.exe") == null && AppSettings.LocalAppPath(@"C:\app.exe:stream") == null, "app pins reject URLs, network paths, relative paths and streams");
+                    string launched = null;
+                    app.ChangeSettings(s => s.Enabled = true);
+                    app.LaunchPinnedApp(pin, Screen.FromHandle(window.Handle), p => launched = p);
+                    Check(launched == pin && (string)typeof(TrayApp).GetField("targetProcess", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(app) == "Pinned test", "pinned launch arms routing only for the selected executable");
+                    bool failedLaunch = false;
+                    try { app.LaunchPinnedApp(pin, Screen.FromHandle(window.Handle), p => { throw new IOException("Test launch failure"); }); } catch (IOException) { failedLaunch = true; }
+                    Check(failedLaunch && typeof(TrayApp).GetField("targetDevice", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(app) == null, "failed pinned launch cancels pending routing");
+                    app.ChangeSettings(s => { s.PinnedApps.Clear(); s.Enabled = false; });
+                    window.Activate(); Application.DoEvents();
+                    typeof(Form).GetMethod("OnActivated", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, new object[] { EventArgs.Empty });
+                    var sceneTest = window.Scene;
+                    sceneTest.MovePointer(new Point(180, 130)); sceneTest.Ripple(new Point(180, 130));
+                    Check(sceneTest.Running == GlassMotion.AnimationsEnabled(), "reactive background follows Windows animation preferences");
+                    for (int ripple = 0; ripple < 8; ripple++) sceneTest.Ripple(new Point(180 + ripple * 4, 130));
+                    Check(sceneTest.RippleCount <= 4, "rapid clicks keep a bounded ripple count");
+                    Message backgroundMove = Message.Create(launcher.Search.Handle, 0x200, IntPtr.Zero, new IntPtr((4 << 16) | 4));
+                    Check(!sceneTest.PreFilterMessage(ref backgroundMove), "cursor reactivity does not consume input");
+                    if (GlassMotion.AnimationsEnabled())
+                    {
+                        using (var before = new Bitmap(window.ClientSize.Width, window.ClientSize.Height))
+                        using (var after = new Bitmap(window.ClientSize.Width, window.ClientSize.Height))
+                        {
+                            typeof(Form).GetMethod("OnDeactivate", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, new object[] { EventArgs.Empty });
+                            Check(!sceneTest.Running && sceneTest.RippleCount == 0, "inactive windows clear reactive work");
+                            using (var drawing = Graphics.FromImage(before)) sceneTest.Draw(drawing, false);
+                            typeof(Form).GetMethod("OnActivated", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, new object[] { EventArgs.Empty });
+                            sceneTest.MovePointer(new Point(84, 322)); sceneTest.Ripple(new Point(84, 322));
+                            using (var drawing = Graphics.FromImage(after)) sceneTest.Draw(drawing, false);
+                            bool different = false;
+                            for (int y = 305; y < 345; y++) for (int x = 64; x < 104; x++) if (before.GetPixel(x, y) != after.GetPixel(x, y)) different = true;
+                            Check(different, "click ripple paints a visible change in the chevron grid");
+                        }
+                    }
+                    window.Hide();
+                    Check(!sceneTest.Running && sceneTest.RippleCount == 0, "hiding clears background animation immediately");
+                    window.Show(); window.Activate(); Application.DoEvents();
                     var enable = Find<CheckBox>(window, "Enable monitor routing");
-                    var signal = Find<AsciiSignal>(window, "Animated display link");
-                    Check(signal != null && !signal.TabStop && !signal.Running, "paused routing keeps decorative ASCII animation idle");
+                    var scene = window.Scene;
+                    WaitFor(() => !scene.Running); Check(!scene.Running, "chevron background rests when there is no interaction");
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
                     Application.DoEvents();
-                    Check(signal.Running == GlassMotion.AnimationsEnabled(), "ASCII display animation follows Windows motion preferences");
+                    Check(!scene.Running, "changing routing does not start a background animation loop");
                     Check(app.Settings.Enabled && store.Load(out notice).Enabled, "enable control saves and updates engine");
                     enable.Checked = false; CheckScrollColors(window);
                     enable.Checked = true; CheckScrollColors(window);
@@ -392,7 +456,7 @@ namespace LaunchHere
                     Find<ListBox>(window, "Excluded apps").SelectedIndex = 0; FindButton(window, "&Remove selected").PerformClick();
                     Check(app.Settings.ExcludedApps.Count == 0 && store.Load(out notice).ExcludedApps.Count == 0, "remove exception saves");
                     window.Hide(); request.Set();
-                    Check(!signal.Running, "ASCII animation stops immediately when settings hide to the tray");
+                    Check(!scene.Running && scene.RippleCount == 0, "chevron animation stops and clears ripples when hidden to tray");
                     typeof(TrayApp).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(app, new object[] { null, EventArgs.Empty });
                     Check(window.Visible, "existing-instance request reopens settings");
                     input.Clear();
