@@ -2,9 +2,9 @@
 
 LaunchHere makes apps open on the monitor where you click their taskbar icon, instead of opening on your main monitor.
 
-It runs in the system tray, with a dark settings window and app exceptions.
+It runs in the system tray, with a dark settings window, app exceptions and a local command launcher.
 
-Pages blend smoothly when you switch tabs. Buttons and switches respond to your input, and a small animated ASCII display link adds some personality. Animations follow your Windows settings. The display animation pauses when the window is hidden or inactive.
+The window has a grid of `>` characters that moves and glows near your cursor, with ripples when you click. Purple controls float above frosted panels. Pages blend smoothly when you switch tabs. Animations follow Windows settings and stop when the window is hidden or inactive.
 
 ## Download
 
@@ -35,6 +35,14 @@ Click the LaunchHere tray icon to open settings. If you don't see it, check the 
 
 Closing the settings window keeps LaunchHere running. Use **Quit app** to stop it.
 
+## Command launcher
+
+Press **Ctrl+K** to search pinned apps and actions such as settings, app exceptions and identifying displays. Press **Enter** to run the first match, **Down** to focus a tile, or **Esc** to clear a search. Pressing Esc again hides the window.
+
+Use **Pin app** to choose a local `.exe`. You can pin up to eight apps; right-click a tile to unpin it. Clicking a pinned app launches it toward the display containing the LaunchHere window, then hides LaunchHere to the tray. Your pins save with your settings and settings backups.
+
+Quick launch uses the same window-positioning limits as taskbar routing. Apps that start a different executable may need manual movement. If routing is paused, the app still launches but LaunchHere leaves its position alone. Pins do not accept URLs, network paths or command-line scripts.
+
 To update or uninstall, quit LaunchHere first. Run a newer installer to update, or remove LaunchHere through Windows **Settings > Apps**. Your preferences are kept if you reinstall.
 
 ## Settings
@@ -47,7 +55,7 @@ Press **Check for updates** on the **Updates & privacy** page to check the lates
 
 Installed copies update through the installer. Portable copies update in their existing folder. Your preferences are kept.
 
-**Internet is used only when you press Check for updates.** There are no background checks, accounts or analytics. That action connects to GitHub and its download servers, which receive your IP address and the app version. Your settings, app exceptions and window activity stay on your PC. LaunchHere does not record click history or keystrokes.
+**LaunchHere uses the internet only when you press Check for updates.** There are no background checks, accounts or analytics. That action connects to GitHub and its download servers, which receive your IP address and the app version. Your settings, pinned app paths, app exceptions and window activity stay on your PC. LaunchHere does not record click history or keystrokes. An app you launch has its own network and privacy behavior.
 
 If Windows security or a work/school policy blocks an unsigned update, it may need to be installed manually. LaunchHere does not disable security settings.
 
@@ -87,6 +95,6 @@ Installer and update handoff checks are in `Tests/InstallerChecks.ps1` and `Test
 
 ## Publishing a release
 
-Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.2` and attach the generated installer and portable ZIP.
+Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.3` and attach the generated installer and portable ZIP.
 
-Keep the generated filenames: `LaunchHere-2.2-Setup-x64.exe` and `LaunchHere-2.2-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.
+Keep the generated filenames: `LaunchHere-2.3-Setup-x64.exe` and `LaunchHere-2.3-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.

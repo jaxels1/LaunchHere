@@ -16,7 +16,7 @@ namespace LaunchHere
         private static readonly Color Accent = Glass.Accent;
         private readonly TrayApp app;
         private readonly SettingsPages tabs;
-        private readonly AsciiSignal signal;
+        private readonly LauncherDeck launcher;
         private readonly Label badge, footer, startupHelp;
         private readonly CheckBox enable, earlyPositioning, startup, previews, retries;
         private readonly NumericUpDown timeout;
@@ -46,39 +46,38 @@ namespace LaunchHere
             ForeColor = Ink;
             AutoScaleMode = AutoScaleMode.Dpi;
             AutoScaleDimensions = new SizeF(96, 96);
-            ClientSize = new Size(900, 740);
-            MinimumSize = new Size(780, 640);
+            ClientSize = new Size(960, 820);
+            MinimumSize = new Size(820, 720);
             StartPosition = FormStartPosition.Manual;
             KeyPreview = true;
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty, BackColor = Color.Transparent };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = Padding.Empty, BackColor = Color.Transparent };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             Controls.Add(root);
+            root.SizeChanged += delegate { int inset = Math.Max(0, (root.Width - 1020 * DeviceDpi / 96) / 2); root.Padding = new Padding(inset, 0, inset, 0); };
 
-            var header = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(28, 20, 28, 12), ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
+            var header = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(28, 20, 28, 12), ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             var brand = new PictureBox { Image = BrandImage(app.AppIcon), BackColor = Color.Transparent, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(48, 48), Margin = new Padding(0, 6, 12, 0), AccessibleName = "LaunchHere logo" };
             header.Controls.Add(brand, 0, 0);
-            var title = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Margin = Padding.Empty, BackColor = Color.Transparent };
-            title.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-            title.RowStyles.Add(new RowStyle(SizeType.Absolute, 37));
-            title.Controls.Add(new Label { Text = "YOUR DISPLAY. YOUR RULES.", Font = new Font("Consolas", 8F), ForeColor = Glass.Cyan, AutoSize = true, Margin = Padding.Empty });
-            title.Controls.Add(new Label { Text = "LaunchHere", Font = new Font("Segoe UI", 22F, FontStyle.Bold), AutoSize = true, Margin = new Padding(0), ForeColor = Ink });
-            title.Controls.Add(new Label { Text = "Open apps on the display you choose.", AutoSize = true, ForeColor = Muted, Margin = new Padding(2, 5, 0, 0) });
+            var title = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = Padding.Empty, BackColor = Color.Transparent };
+            title.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            title.Controls.Add(new Label { Text = "LaunchHere", Font = new Font("Segoe UI", 20F, FontStyle.Bold), AutoSize = true, Margin = Padding.Empty, ForeColor = Ink });
+            title.Controls.Add(new Label { Text = "YOUR APPS. YOUR DISPLAY.", Font = new Font("Consolas", 8F), ForeColor = Glass.Cyan, AutoSize = true, Margin = new Padding(2, 6, 0, 0) });
             header.Controls.Add(title, 1, 0);
-            signal = new AsciiSignal { Dock = DockStyle.Fill, Margin = new Padding(8, 0, 12, 0), AccessibleName = "Animated display link" };
-            header.Controls.Add(signal, 2, 0);
             badge = new GlassBadge { TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Top, Height = 36, Margin = new Padding(8, 13, 0, 0), Font = new Font("Segoe UI", 10F, FontStyle.Bold), AccessibleName = "App status" };
-            header.Controls.Add(badge, 3, 0);
+            header.Controls.Add(badge, 2, 0);
             root.Controls.Add(header, 0, 0);
+            launcher = new LauncherDeck(PinApp) { Dock = DockStyle.Fill, Margin = new Padding(28, 0, 28, 8), AccessibleName = "Command launcher" };
+            root.Controls.Add(launcher, 0, 1);
 
             tabs = new SettingsPages { Dock = DockStyle.Fill, Margin = new Padding(24, 18, 24, 0), AccessibleName = "Settings pages" };
-            tabs.SelectionChanged += delegate { signal.React(tabs.SelectedIndex); };
-            root.Controls.Add(tabs, 0, 1);
+            root.Controls.Add(tabs, 0, 2);
             var general = Page("Settings");
             var apps = Page("App exceptions");
             var about = Page("Updates && privacy");
@@ -205,7 +204,7 @@ namespace LaunchHere
             quit.Dock = hide.Dock = DockStyle.Fill;
             bottom.Controls.Add(quit, 1, 0);
             bottom.Controls.Add(hide, 2, 0);
-            root.Controls.Add(bottom, 0, 2);
+            root.Controls.Add(bottom, 0, 3);
 
             statusTip = new ToolTip { AutoPopDelay = 12000, InitialDelay = 500, ShowAlways = true };
 
@@ -300,6 +299,56 @@ namespace LaunchHere
             app.ChangeSettings(s => s.ExcludedApps.Add(name));
             processName.Clear();
             processName.Focus();
+        }
+
+        private void RefreshLauncher()
+        {
+            var commands = new System.Collections.Generic.List<LauncherDeck.Command>();
+            foreach (string path in app.Settings.PinnedApps)
+            {
+                string pin = path;
+                commands.Add(new LauncherDeck.Command { Name = Path.GetFileNameWithoutExtension(pin), Detail = "Launch on this display", Run = delegate { LaunchPin(pin); }, Remove = delegate { app.ChangeSettings(s => s.PinnedApps.Remove(pin)); } });
+            }
+            commands.Add(new LauncherDeck.Command { Name = "Settings", Detail = "Preferences", Run = delegate { tabs.SelectedIndex = 0; } });
+            commands.Add(new LauncherDeck.Command { Name = "App exceptions", Detail = "Manage list", Run = delegate { tabs.SelectedIndex = 1; } });
+            commands.Add(new LauncherDeck.Command { Name = "Updates & privacy", Detail = "Manual updates", Run = delegate { tabs.SelectedIndex = 2; } });
+            commands.Add(new LauncherDeck.Command { Name = "Identify displays", Detail = "Show numbers", Run = IdentifyDisplays });
+            commands.Add(new LauncherDeck.Command { Name = app.Settings.Enabled ? "Pause routing" : "Resume routing", Detail = "Taskbar routing", Run = delegate { app.ChangeSettings(s => s.Enabled = !s.Enabled); } });
+            launcher.SetCommands(commands, String.Join("|", app.Settings.PinnedApps) + app.Settings.Enabled);
+        }
+        private void PinApp()
+        {
+            using (var dialog = new OpenFileDialog { Title = "Pin an app to LaunchHere", Filter = "Local applications (*.exe)|*.exe", CheckFileExists = true, Multiselect = false })
+            {
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    try { PinAppFile(dialog.FileName); }
+                    catch (IOException ex) { MessageBox.Show(this, ex.Message, "Could not pin app", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+            }
+        }
+        internal void PinAppFile(string selectedPath)
+        {
+            string path = AppSettings.LocalAppPath(selectedPath);
+            if (path == null || !File.Exists(path)) throw new IOException("Choose an existing .exe on a local drive.");
+            if (app.Settings.PinnedApps.Exists(p => String.Equals(p, path, StringComparison.OrdinalIgnoreCase))) return;
+            if (app.Settings.PinnedApps.Count >= 8) throw new IOException("You can pin up to eight apps. Right-click a pinned tile to unpin one first.");
+            app.ChangeSettings(s => s.PinnedApps.Add(path));
+        }
+        private void LaunchPin(string path)
+        {
+            Screen display = Screen.FromHandle(Handle);
+            try
+            {
+                app.LaunchPinnedApp(path, display, delegate(string executable)
+                {
+                    Hide();
+                    Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(executable) });
+                });
+            }
+            catch (Exception ex)
+            {
+                if (!(ex is IOException) && !(ex is UnauthorizedAccessException) && !(ex is System.ComponentModel.Win32Exception) && !(ex is System.Security.SecurityException)) throw;
+                Show(); Activate(); MessageBox.Show(this, ex.Message, "Could not launch app", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void BrowseException()
@@ -438,10 +487,10 @@ namespace LaunchHere
                 retries.Checked = app.Settings.RetryMovement;
                 timeout.Value = app.Settings.LaunchTimeoutSeconds;
                 badge.Text = app.Settings.Enabled ? "●  Enabled" : "●  Paused";
-                badge.BackColor = app.Settings.Enabled ? Color.FromArgb(22, 51, 65) : Color.FromArgb(58, 46, 30);
-                badge.ForeColor = app.Settings.Enabled ? Glass.Cyan : Color.FromArgb(252, 198, 113);
-                signal.RoutingEnabled = app.Settings.Enabled;
-                footer.Text = app.SaveNotice;
+                badge.BackColor = app.Settings.Enabled ? Color.FromArgb(41, 31, 54) : Color.FromArgb(48, 41, 30);
+                badge.ForeColor = app.Settings.Enabled ? Glass.Cyan : Color.FromArgb(220, 190, 142);
+                footer.Text = Screen.AllScreens.Length + " displays  /  " + UpdateClient.DisplayVersion(UpdateClient.CurrentVersion) + "  /  " + app.SaveNotice;
+                RefreshLauncher();
                 statusTip.SetToolTip(footer, app.SaveNotice);
                 object selection = exclusions.SelectedItem;
                 exclusions.BeginUpdate();
@@ -469,6 +518,8 @@ namespace LaunchHere
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (keyData == (Keys.Control | Keys.K)) { launcher.Search.Focus(); launcher.Search.SelectAll(); return true; }
+            if (keyData == Keys.Escape && launcher.Search.Focused && launcher.Search.Text.Length > 0) { launcher.Search.Clear(); return true; }
             if (keyData == Keys.Escape) { Hide(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -715,8 +766,8 @@ namespace LaunchHere
             foreach (var screen in screens)
             {
                 var rect = new RectangleF(ox + (screen.Bounds.Left - union.Left) * scale + 2, oy + (screen.Bounds.Top - union.Top) * scale + 2, Math.Max(10, screen.Bounds.Width * scale - 4), Math.Max(10, screen.Bounds.Height * scale - 4));
-                Color fill = SystemInformation.HighContrast ? SystemColors.Control : screen.Primary ? Color.FromArgb(24, 62, 83) : Color.FromArgb(27, 42, 63);
-                Color stroke = SystemInformation.HighContrast ? SystemColors.ControlText : screen.Primary ? Glass.Cyan : Color.FromArgb(84, 117, 153);
+                Color fill = SystemInformation.HighContrast ? SystemColors.Control : screen.Primary ? Color.FromArgb(51, 37, 70) : Glass.ButtonBottom;
+                Color stroke = SystemInformation.HighContrast ? SystemColors.ControlText : screen.Primary ? Glass.Cyan : Glass.Muted;
                 using (var path = Glass.Rounded(rect, 8 * DeviceDpi / 96F))
                 {
                     using (var brush = new SolidBrush(fill)) e.Graphics.FillPath(brush, path);

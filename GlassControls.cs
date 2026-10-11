@@ -9,21 +9,21 @@ namespace LaunchHere
 {
     internal static class Glass
     {
-        internal static readonly Color Ink = Color.FromArgb(232, 240, 250);
-        internal static readonly Color Muted = Color.FromArgb(163, 180, 203);
-        internal static readonly Color Accent = Color.FromArgb(45, 101, 219);
-        internal static readonly Color Cyan = Color.FromArgb(103, 224, 230);
-        internal static readonly Color Canvas = Color.FromArgb(12, 19, 31);
-        internal static readonly Color CanvasTop = Color.FromArgb(15, 25, 41);
-        internal static readonly Color CanvasBottom = Color.FromArgb(10, 16, 27);
-        internal static readonly Color CardTop = Color.FromArgb(245, 25, 37, 56);
-        internal static readonly Color CardBottom = Color.FromArgb(235, 19, 29, 46);
-        internal static readonly Color Input = Color.FromArgb(14, 23, 37);
-        internal static readonly Color ButtonTop = Color.FromArgb(34, 49, 71);
-        internal static readonly Color ButtonBottom = Color.FromArgb(25, 38, 57);
-        internal static readonly Color Disabled = Color.FromArgb(112, 130, 154);
-        internal static readonly Color Track = Color.FromArgb(48, 65, 88);
-        internal static readonly Color Border = Color.FromArgb(110, 73, 98, 132);
+        internal static readonly Color Ink = Color.FromArgb(235, 231, 242);
+        internal static readonly Color Muted = Color.FromArgb(164, 155, 179);
+        internal static readonly Color Accent = Color.FromArgb(106, 78, 150);
+        internal static readonly Color Cyan = Color.FromArgb(185, 159, 220);
+        internal static readonly Color Canvas = Color.FromArgb(10, 10, 12);
+        internal static readonly Color CanvasTop = Canvas;
+        internal static readonly Color CanvasBottom = Canvas;
+        internal static readonly Color CardTop = Color.FromArgb(216, 25, 22, 31);
+        internal static readonly Color CardBottom = Color.FromArgb(230, 19, 17, 24);
+        internal static readonly Color Input = Color.FromArgb(19, 17, 24);
+        internal static readonly Color ButtonTop = Color.FromArgb(45, 37, 57);
+        internal static readonly Color ButtonBottom = Color.FromArgb(31, 27, 39);
+        internal static readonly Color Disabled = Color.FromArgb(118, 109, 132);
+        internal static readonly Color Track = Color.FromArgb(57, 48, 70);
+        internal static readonly Color Border = Color.FromArgb(90, 125, 105, 150);
         // Transparent child controls repaint with a translated, clipped Graphics.
         // TextRenderer must preserve both or text can leak into sibling controls.
         internal const TextFormatFlags PaintText = TextFormatFlags.PreserveGraphicsClipping | TextFormatFlags.PreserveGraphicsTranslateTransform;
@@ -52,7 +52,7 @@ namespace LaunchHere
             var rect = new RectangleF(bounds.X + 1, bounds.Y + 1, bounds.Width - 3, bounds.Height - 3);
             using (var path = Rounded(rect, radius))
             using (var gradient = new LinearGradientBrush(rect, top, bottom, 80F))
-            using (var rim = new Pen(Color.FromArgb(24, 156, 204, 245), 1F))
+            using (var rim = new Pen(Color.FromArgb(18, 215, 193, 245), 1F))
             using (var edge = new Pen(Border, 1F))
             {
                 graphics.FillPath(gradient, path);
@@ -64,13 +64,7 @@ namespace LaunchHere
         internal static void CanvasBackground(Graphics graphics, Rectangle bounds)
         {
             if (bounds.Width < 2 || bounds.Height < 2) return;
-            using (var fill = new LinearGradientBrush(bounds, CanvasTop, CanvasBottom, 40F)) graphics.FillRectangle(fill, bounds);
-            var orb = new Rectangle(-bounds.Width / 3, -bounds.Height / 2, bounds.Width, bounds.Height);
-            using (var path = new GraphicsPath())
-            {
-                path.AddEllipse(orb);
-                using (var glow = new PathGradientBrush(path) { CenterColor = Color.FromArgb(32, 57, 145, 203), SurroundColors = new[] { Color.FromArgb(0, 57, 145, 203) } }) graphics.FillPath(glow, path);
-            }
+            using (var fill = new SolidBrush(Canvas)) graphics.FillRectangle(fill, bounds);
         }
         internal static void ParentBackground(Graphics graphics, Control control)
         {
@@ -92,19 +86,39 @@ namespace LaunchHere
                     {
                         using (var fill = new SolidBrush(parent.BackColor)) graphics.FillRectangle(fill, parent.ClientRectangle);
                     }
-                    else if (parent is GlassForm) CanvasBackground(graphics, parent.ClientRectangle);
-                    else if (parent is GlassCard) Surface(graphics, parent.ClientRectangle, CardTop, CardBottom, 18 * parent.DeviceDpi / 96F);
+                    else if (parent is GlassForm) ((GlassForm)parent).PaintCanvas(graphics, false);
+                    else if (parent is GlassCard) CardBackground(graphics, parent);
                     else if (parent.BackColor.A == 255)
                         using (var fill = new SolidBrush(parent.BackColor)) graphics.FillRectangle(fill, parent.ClientRectangle);
                 }
                 finally { graphics.Restore(state); }
             }
         }
+        internal static void CardBackground(Graphics graphics, Control card)
+        {
+            var form = card.FindForm() as GlassForm;
+            if (form != null)
+            {
+                var state = graphics.Save();
+                try
+                {
+                    using (var clip = Rounded(new RectangleF(1, 1, Math.Max(1, card.Width - 3), Math.Max(1, card.Height - 3)), 18 * card.DeviceDpi / 96F)) graphics.SetClip(clip, CombineMode.Intersect);
+                    var offset = Point.Empty;
+                    for (Control child = card; child != form && child != null; child = child.Parent) offset.Offset(child.Location);
+                    graphics.TranslateTransform(-offset.X, -offset.Y); form.PaintCanvas(graphics, true);
+                }
+                finally { graphics.Restore(state); }
+            }
+            Surface(graphics, card.ClientRectangle, CardTop, CardBottom, 18 * card.DeviceDpi / 96F);
+        }
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int length);
         internal static void RoundWindow(IntPtr hwnd)
         {
             if (SystemInformation.HighContrast) return;
-            try { int preference = 2; DwmSetWindowAttribute(hwnd, 33, ref preference, 4); }
+            try {
+                int preference = 2; DwmSetWindowAttribute(hwnd, 33, ref preference, 4);
+                int dark = 1; DwmSetWindowAttribute(hwnd, 20, ref dark, 4);
+            }
             catch (DllNotFoundException) { }
             catch (EntryPointNotFoundException) { }
         }
@@ -224,15 +238,18 @@ namespace LaunchHere
     }
     internal class GlassForm : Form
     {
-        internal GlassForm() { DoubleBuffered = true; BackColor = Glass.Canvas; SetStyle(ControlStyles.ResizeRedraw, true); }
+        internal readonly ChevronScene Scene;
+        internal GlassForm() { DoubleBuffered = true; BackColor = Glass.Canvas; SetStyle(ControlStyles.ResizeRedraw, true); Scene = new ChevronScene(this); }
+        internal void PaintCanvas(Graphics graphics, bool blurred) { Scene.Draw(graphics, blurred); }
         protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Glass.RoundWindow(Handle); }
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             if (SystemInformation.HighContrast) { base.OnPaintBackground(e); return; }
-            Glass.CanvasBackground(e.Graphics, ClientRectangle);
+            PaintCanvas(e.Graphics, false);
         }
+        protected override void Dispose(bool disposing) { if (disposing) Scene.Dispose(); base.Dispose(disposing); }
     }
-    internal sealed class GlassCard : TableLayoutPanel
+    internal class GlassCard : TableLayoutPanel
     {
         internal GlassCard()
         {
@@ -244,7 +261,7 @@ namespace LaunchHere
         {
             Glass.ParentBackground(e.Graphics, this);
             if (!SystemInformation.HighContrast)
-                Glass.Surface(e.Graphics, ClientRectangle, Glass.CardTop, Glass.CardBottom, 18 * DeviceDpi / 96F);
+            Glass.CardBackground(e.Graphics, this);
         }
     }
     internal sealed class GlassButton : Button
@@ -265,10 +282,10 @@ namespace LaunchHere
         {
             if (tint == null) return;
             bool primary = BackColor == Glass.Accent;
-            Color top = primary ? (hover ? Color.FromArgb(66, 126, 235) : Color.FromArgb(53, 112, 228)) : hover ? Color.FromArgb(44, 66, 92) : Glass.ButtonTop;
+            Color top = primary ? (hover ? Color.FromArgb(139, 107, 181) : Color.FromArgb(120, 91, 164)) : hover ? Color.FromArgb(63, 50, 79) : Glass.ButtonTop;
             Color bottom = primary ? Glass.Accent : Glass.ButtonBottom;
             if (pressed && Enabled) { top = Glass.Mix(top, Color.Black, .16); bottom = Glass.Mix(bottom, Color.Black, .16); }
-            if (!Enabled) { top = Color.FromArgb(22, 33, 49); bottom = top; }
+            if (!Enabled) { top = Color.FromArgb(27, 24, 33); bottom = top; }
             tint.Set(top, bottom, !Enabled ? Glass.Disabled : primary ? Color.White : ForeColor);
         }
         private void SetPressed(bool value)
@@ -422,9 +439,9 @@ namespace LaunchHere
                     float inset = Math.Max(3, width * .28F);
                     var rect = new RectangleF(bar.Left + inset, arrow + position, Math.Max(2, width - 2 * inset), thumb);
                     using (var path = Glass.Rounded(rect, rect.Width / 2))
-                    using (var brush = new SolidBrush(Color.FromArgb(150, 121, 145, 179))) graphics.FillPath(brush, path);
+                    using (var brush = new SolidBrush(Color.FromArgb(150, 145, 125, 169))) graphics.FillPath(brush, path);
                     float center = bar.Left + width / 2F, delta = 3 * DeviceDpi / 96F;
-                    using (var pen = new Pen(Color.FromArgb(136, 157, 187), 1.4F))
+                    using (var pen = new Pen(Glass.Muted, 1.4F))
                     {
                         graphics.DrawLines(pen, new[] { new PointF(center - delta, arrow / 2F + delta / 2), new PointF(center, arrow / 2F - delta / 2), new PointF(center + delta, arrow / 2F + delta / 2) });
                         graphics.DrawLines(pen, new[] { new PointF(center - delta, Height - arrow / 2F - delta / 2), new PointF(center, Height - arrow / 2F + delta / 2), new PointF(center + delta, Height - arrow / 2F - delta / 2) });
@@ -432,124 +449,6 @@ namespace LaunchHere
                 }
             }
             finally { if (paintDc == IntPtr.Zero) ReleaseDC(Handle, dc); }
-        }
-    }
-    internal sealed class AsciiSignal : Control
-    {
-        private readonly Timer animation;
-        private readonly Stopwatch clock = new Stopwatch();
-        private readonly GlassMotion pulse;
-        private readonly Font glyphFont = new Font("Consolas", 9F, FontStyle.Regular, GraphicsUnit.Pixel);
-        private Form host;
-        private bool hostActive;
-        private Point pointer = new Point(-100, -100);
-        private int page;
-        private bool routing = true;
-        internal bool Running { get { return animation != null && animation.Enabled; } }
-        internal bool RoutingEnabled
-        {
-            get { return routing; }
-            set { if (routing == value) return; routing = value; SyncAnimation(); Invalidate(); }
-        }
-        internal AsciiSignal()
-        {
-            TabStop = false;
-            AccessibleRole = AccessibleRole.Graphic;
-            AccessibleDescription = "Decorative ASCII display link. Animations follow Windows settings.";
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
-            pulse = new GlassMotion(this, 0, Invalidate);
-            animation = new Timer { Interval = 40 };
-            animation.Tick += delegate { SyncAnimation(); if (Running) Invalidate(); };
-        }
-        internal void React(int selectedPage)
-        {
-            page = selectedPage;
-            pulse.Snap(1); pulse.MoveTo(0, 650); Invalidate();
-        }
-        private void AttachHost()
-        {
-            Form next = FindForm();
-            if (host == next) return;
-            if (host != null) { host.Activated -= HostActivated; host.Deactivate -= HostDeactivated; host.VisibleChanged -= HostChanged; }
-            host = next;
-            hostActive = host != null && (Form.ActiveForm == host || host.ContainsFocus);
-            if (host != null) { host.Activated += HostActivated; host.Deactivate += HostDeactivated; host.VisibleChanged += HostChanged; }
-        }
-        private void HostChanged(object sender, EventArgs e) { SyncAnimation(); }
-        private void HostActivated(object sender, EventArgs e) { hostActive = true; SyncAnimation(); }
-        private void HostDeactivated(object sender, EventArgs e) { hostActive = false; SyncAnimation(); }
-        private void SyncAnimation()
-        {
-            if (animation == null) return;
-            bool active = !IsDisposed && IsHandleCreated && Visible && routing && host != null && host.Visible && host.WindowState != FormWindowState.Minimized && hostActive && GlassMotion.AnimationsEnabled();
-            if (active) { clock.Start(); animation.Start(); }
-            else { animation.Stop(); clock.Stop(); }
-        }
-        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); AttachHost(); SyncAnimation(); }
-        protected override void OnHandleDestroyed(EventArgs e) { if (animation != null) { animation.Stop(); clock.Stop(); } base.OnHandleDestroyed(e); }
-        protected override void OnVisibleChanged(EventArgs e) { base.OnVisibleChanged(e); AttachHost(); SyncAnimation(); }
-        protected override void OnMouseMove(MouseEventArgs e) { pointer = e.Location; if (GlassMotion.AnimationsEnabled()) Invalidate(); base.OnMouseMove(e); }
-        protected override void OnMouseLeave(EventArgs e) { pointer = new Point(-100, -100); Invalidate(); base.OnMouseLeave(e); }
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Glass.ParentBackground(e.Graphics, this);
-            if (Width < 2 || Height < 2) return;
-            if (SystemInformation.HighContrast)
-            {
-                TextRenderer.DrawText(e.Graphics, "[ DISPLAY ] -> [ DISPLAY ]", Font, ClientRectangle, SystemColors.ControlText,
-                    Glass.PaintText | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                return;
-            }
-            Glass.Surface(e.Graphics, ClientRectangle, Color.FromArgb(18, 34, 51), Glass.Input, 14 * DeviceDpi / 96F);
-            var state = e.Graphics.Save();
-            try
-            {
-                float scale = DeviceDpi / 96F;
-                e.Graphics.ScaleTransform(scale, scale);
-                float width = Width / scale, height = Height / scale;
-                float xOffset = (width - 30 * 5.4F) / 2, yOffset = Math.Max(23, (height - 62) / 2 + 9);
-                Color accent = routing ? Glass.Cyan : Color.FromArgb(252, 198, 113);
-                using (var brush = new SolidBrush(accent))
-                    e.Graphics.DrawString(routing ? "DISPLAY LINK" : "ROUTING PAUSED", glyphFont, brush, 12, 8, StringFormat.GenericTypographic);
-                string[] lines = { " .--------.        .--------. ", " |        |        |        | ", " |        |  --->  |        | ", " |        |        |        | ", " '--------'        '--------' ", "    _||_              _||_    " };
-                double phase = GlassMotion.AnimationsEnabled() ? clock.Elapsed.TotalSeconds : 0;
-                for (int row = 0; row < lines.Length; row++)
-                for (int col = 0; col < lines[row].Length; col++)
-                {
-                    char glyph = lines[row][col];
-                    double light = .25;
-                    bool display = row >= 1 && row <= 3 && ((col >= 2 && col <= 9) || (col >= 20 && col <= 27));
-                    if (display)
-                    {
-                        double distance = Math.Sqrt(Math.Pow(col * 5.4 + xOffset - pointer.X / scale, 2) + Math.Pow(row * 10 + yOffset - pointer.Y / scale, 2));
-                        double wave = (Math.Sin(col * .6 + row * .85 - phase * 2.2 + page * .8) + 1) / 2;
-                        light = Math.Min(1, wave * .7 + Math.Max(0, 1 - distance / 60) * .5 + pulse.Value * .3);
-                        glyph = ".:-=+*#"[(int)Math.Round(light * 6)];
-                    }
-                    else if (row == 2 && col >= 12 && col <= 17)
-                    {
-                        int packet = (int)(phase * 4) % 6;
-                        if (page == 1) packet = 5 - packet;
-                        glyph = routing ? col == 12 + packet ? (page == 1 ? '<' : '>') : '.' : '-';
-                        light = col == 12 + packet ? 1 : .2;
-                    }
-                    if (glyph == ' ') continue;
-                    using (var brush = new SolidBrush(Glass.Mix(Color.FromArgb(93, 125, 157), accent, light)))
-                        e.Graphics.DrawString(glyph.ToString(), glyphFont, brush, xOffset + col * 5.4F, yOffset + row * 10, StringFormat.GenericTypographic);
-                }
-            }
-            finally { e.Graphics.Restore(state); }
-        }
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                if (animation != null) animation.Dispose();
-                if (pulse != null) pulse.Dispose();
-                clock.Stop(); glyphFont.Dispose();
-                if (host != null) { host.Activated -= HostActivated; host.Deactivate -= HostDeactivated; host.VisibleChanged -= HostChanged; host = null; }
-            }
-            base.Dispose(disposing);
         }
     }
     internal sealed class GlassNumber : NumericUpDown
@@ -598,7 +497,7 @@ namespace LaunchHere
                         graphics.SmoothingMode = SmoothingMode.AntiAlias;
                         using (var fill = new SolidBrush(Glass.ButtonBottom)) graphics.FillRectangle(fill, button.ClientRectangle);
                         float middle = button.Height / 2F, center = button.Width / 2F, delta = 3 * button.DeviceDpi / 96F;
-                        using (var divider = new Pen(Color.FromArgb(49, 70, 100)))
+                        using (var divider = new Pen(Glass.Track))
                         {
                             graphics.DrawLine(divider, 0, 0, 0, button.Height);
                             graphics.DrawLine(divider, 0, middle, button.Width, middle);

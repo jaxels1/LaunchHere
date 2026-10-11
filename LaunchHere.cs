@@ -76,6 +76,7 @@ namespace LaunchHere
         internal Icon AppIcon { get { return appIcon; } }
         internal event EventHandler StateChanged;
         private string targetDevice;
+        private string targetProcess;
         private uint clickTime;
         private int generation, candidateGeneration, movePass;
         private IntPtr candidate, clickForeground;
@@ -154,6 +155,17 @@ namespace LaunchHere
             UpdateStatus();
         }
 
+        internal void LaunchPinnedApp(string selectedPath, Screen display, Action<string> launch)
+        {
+            string path = AppSettings.LocalAppPath(selectedPath);
+            if (path == null || !Settings.PinnedApps.Exists(p => String.Equals(p, path, StringComparison.OrdinalIgnoreCase)) || !File.Exists(path))
+                throw new IOException("This pinned app could not be found. Unpin it and choose its current executable.");
+            if (Settings.Enabled) { BeginRouting(display.DeviceName, unchecked((uint)Environment.TickCount), IntPtr.Zero); targetProcess = Path.GetFileNameWithoutExtension(path); }
+            else Cancel();
+            try { launch(path); }
+            catch { Cancel(); throw; }
+        }
+
         private void UpdateStatus()
         {
             enabledItem.Checked = Settings.Enabled;
@@ -205,7 +217,7 @@ namespace LaunchHere
 
         private void Cancel()
         {
-            targetDevice = null; candidate = IntPtr.Zero; clickForeground = IntPtr.Zero; createdWindows.Clear(); generation++;
+            targetDevice = null; targetProcess = null; candidate = IntPtr.Zero; clickForeground = IntPtr.Zero; createdWindows.Clear(); generation++;
             if (timer != null && !disposed) timer.Interval = 100;
         }
         internal void BeginRouting(string device, uint time, IntPtr foreground)
@@ -326,6 +338,7 @@ namespace LaunchHere
                 using (var process = Process.GetProcessById((int)pid))
                 {
                     string name = process.ProcessName;
+                    if (targetProcess != null && !String.Equals(targetProcess, name, StringComparison.OrdinalIgnoreCase)) return false;
                     if (Settings.IsExcluded(name)) { Cancel(); return false; }
                     if (name == "StartMenuExperienceHost" || name == "ShellExperienceHost" || name == "SearchHost" || name == "SearchApp" || name == "TextInputHost" || name == "Widgets") return false;
                 }

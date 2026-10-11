@@ -16,6 +16,7 @@ namespace LaunchHere
         [DataMember] internal bool RetryMovement = true;
         [DataMember] internal int LaunchTimeoutSeconds = 12;
         [DataMember] internal List<string> ExcludedApps = new List<string>();
+        [DataMember] internal List<string> PinnedApps = new List<string>();
 
         [OnDeserializing]
         private void Defaults(StreamingContext context)
@@ -26,6 +27,7 @@ namespace LaunchHere
             RetryMovement = true;
             LaunchTimeoutSeconds = 12;
             ExcludedApps = new List<string>();
+            PinnedApps = new List<string>();
         }
 
         internal static string ProcessName(string input)
@@ -48,6 +50,26 @@ namespace LaunchHere
             }
             clean.Sort(StringComparer.OrdinalIgnoreCase);
             ExcludedApps = clean;
+            var pins = new List<string>();
+            foreach (string item in PinnedApps ?? new List<string>())
+            {
+                string path = LocalAppPath(item);
+                if (path != null && pins.Count < 8 && !pins.Exists(x => String.Equals(x, path, StringComparison.OrdinalIgnoreCase))) pins.Add(path);
+            }
+            PinnedApps = pins;
+        }
+
+        internal static string LocalAppPath(string input)
+        {
+            if (String.IsNullOrWhiteSpace(input) || input.Length > 260 || !Regex.IsMatch(input, @"^[A-Za-z]:[\\/]") || input.IndexOf(':', 2) >= 0) return null;
+            try
+            {
+                string path = Path.GetFullPath(input);
+                return String.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase) ? path : null;
+            }
+            catch (ArgumentException) { return null; }
+            catch (NotSupportedException) { return null; }
+            catch (PathTooLongException) { return null; }
         }
 
         internal bool IsExcluded(string name)
