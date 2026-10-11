@@ -111,7 +111,13 @@ namespace LaunchHere
             if(control.IsHandleCreated) InvalidateRect(control.Handle, ref rectangle, false);
             foreach (Control child in control.Controls)
             {
-                if (!(child is Panel) && !(child is TableLayoutPanel)) continue;
+                // Transparent labels/pictures can cover large areas of canvas
+                // (the header title and the fill-width status label). Windows
+                // clips the parent paint around their windows, so each visible
+                // background owner needs its own small native invalidation.
+                // Custom controls also expose the canvas at rounded corners.
+                if (!(child is Panel) && !(child is TableLayoutPanel) && child.BackColor.A == 255
+                    && !(child is GlassButton) && !(child is GlassBadge)) continue;
                 InvalidateCanvas(child, area, new Point(offset.X + child.Left, offset.Y + child.Top));
             }
         }
