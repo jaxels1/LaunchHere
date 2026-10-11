@@ -12,16 +12,22 @@ namespace LaunchHere
     internal sealed class ChevronScene : IDisposable, IMessageFilter
     {
         private readonly GlassForm owner;
-        private readonly Timer timer = new Timer { Interval = 33 };
+        private readonly Timer timer = new Timer { Interval = 16 };
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly List<Wave> waves = new List<Wave>();
-        private Bitmap baseline, frame, frost, thumbnail;
+        private Bitmap baseline, frame, frost;
+        private readonly Bitmap[] glyphs = new Bitmap[32];
         private PointF pointer = new PointF(-1000, -1000), target = new PointF(-1000, -1000);
-        private double glow, lastMove;
+        private Rectangle previousArea;
+        private double glow, lastMove, lastTick;
         private bool dirty = true, active, disposed;
         private sealed class Wave { internal PointF Center; internal double Started; }
         internal bool Running { get { return !disposed && timer.Enabled; } }
         internal int RippleCount { get { return waves.Count; } }
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct PaintRect { internal int Left, Top, Right, Bottom; }
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool InvalidateRect(IntPtr window, ref PaintRect rectangle, bool erase);
         internal ChevronScene(GlassForm owner)
         {
             this.owner = owner;
@@ -38,20 +44,24 @@ namespace LaunchHere
         private void Stop()
         {
             timer.Stop(); waves.Clear(); glow = 0; pointer = target = new PointF(-1000, -1000); dirty = true;
-            if (!owner.IsDisposed) owner.Invalidate(true);
+            if (!owner.IsDisposed) RefreshCanvas(previousArea);
+        }
+        private void Start()
+        {
+            if (!timer.Enabled) lastTick = clock.Elapsed.TotalSeconds;
+            timer.Start(); dirty = true;
         }
         internal void MovePointer(Point location)
         {
-            if (!Allowed) return;
+            if (!Allowed || (target.X == location.X && target.Y == location.Y)) return;
             target = location; if (glow == 0) pointer = target;
-            lastMove = clock.Elapsed.TotalSeconds; timer.Start(); dirty = true;
+            lastMove = clock.Elapsed.TotalSeconds; Start();
         }
         internal void Ripple(Point location)
         {
             if (!Allowed) return;
             if (waves.Count == 4) waves.RemoveAt(0);
-            waves.Add(new Wave { Center = location, Started = clock.Elapsed.TotalSeconds });
-            timer.Start(); dirty = true;
+            waves.Add(new Wave { Center = location, Started = clock.Elapsed.TotalSeconds }); Start();
         }
         public bool PreFilterMessage(ref Message message)
         {
@@ -72,97 +82,150 @@ namespace LaunchHere
         private void Tick(object sender, EventArgs e)
         {
             if (!Allowed) { Stop(); return; }
-            double now = clock.Elapsed.TotalSeconds;
+            double now = clock.Elapsed.TotalSeconds, elapsed = Math.Min(.1, Math.Max(0, now - lastTick)); lastTick = now;
             waves.RemoveAll(w => now - w.Started > 1.15);
-            pointer = new PointF(pointer.X + (target.X - pointer.X) * .24F, pointer.Y + (target.Y - pointer.Y) * .24F);
+            float follow = (float)(1 - Math.Exp(-12 * elapsed));
+            pointer = new PointF(pointer.X + (target.X - pointer.X) * follow, pointer.Y + (target.Y - pointer.Y) * follow);
             bool moving = now - lastMove < .12;
-            glow += ((moving ? 1 : 0) - glow) * .17;
+            glow += ((moving ? 1 : 0) - glow) * (1 - Math.Exp(-9 * elapsed));
             if (!moving && glow < .015 && waves.Count == 0) { glow = 0; timer.Stop(); }
-            dirty = true; owner.Invalidate(true);
+            Rectangle next = ActiveArea(now);
+            Rectangle area = previousArea.IsEmpty ? next : next.IsEmpty ? previousArea : Rectangle.Union(previousArea, next);
+            dirty = true;
+            // Only uncovered canvas containers repaint. Cards and their controls
+            // keep their cached frost; cursor movement never repaints a textbox.
+            RefreshCanvas(area);
         }
+        private void RefreshCanvas(Rectangle area)
+        {
+            InvalidateCanvas(owner, area, Point.Empty);
+        }
+        private static void InvalidateCanvas(Control control, Rectangle area, Point offset)
+        {
+            if (!control.Visible || control is GlassCard) return;
+            var local = area; local.Offset(-offset.X, -offset.Y); local.Intersect(control.ClientRectangle);
+            if (local.IsEmpty) return;
+            // Managed Invalidate propagates through transparent children. Native
+            // invalidation leaves cached card islands and their controls alone.
+            var rectangle = new PaintRect { Left=local.Left, Top=local.Top, Right=local.Right, Bottom=local.Bottom };
+            if(control.IsHandleCreated) InvalidateRect(control.Handle, ref rectangle, false);
+            foreach (Control child in control.Controls)
+            {
+                if (!(child is Panel) && !(child is TableLayoutPanel)) continue;
+                InvalidateCanvas(child, area, new Point(offset.X + child.Left, offset.Y + child.Top));
+            }
+        }
+        private Rectangle ActiveArea(double now)
+        {
+            float scale = owner.DeviceDpi / 96F;
+            Rectangle area = Rectangle.Empty;
+            if (glow > 0) area = Around(pointer, 165 * scale);
+            foreach (var wave in waves)
+            {
+                var bounds = Around(wave.Center, (float)((Math.Max(0, now - wave.Started) * 420 + 65) * scale));
+                area = area.IsEmpty ? bounds : Rectangle.Union(area, bounds);
+            }
+            area.Intersect(owner.ClientRectangle); return area;
+        }
+        private static Rectangle Around(PointF center, float radius)
+        { return Rectangle.FromLTRB((int)Math.Floor(center.X-radius), (int)Math.Floor(center.Y-radius), (int)Math.Ceiling(center.X+radius), (int)Math.Ceiling(center.Y+radius)); }
         internal void Draw(Graphics graphics, bool blurred)
         {
             if (disposed || owner.ClientSize.Width < 2 || owner.ClientSize.Height < 2) return;
-            EnsureFrame();
-            var state = graphics.Save();
-            try
-            {
-                graphics.DrawImageUnscaled(blurred ? frost : frame, Point.Empty);
-            }
-            finally { graphics.Restore(state); }
+            EnsureFrame(!blurred);
+            // Copy the visible pixels, rather than asking GDI+ to replay a full
+            // window bitmap for every small transparent child.
+            var bounds = Rectangle.Intersect(Rectangle.Ceiling(graphics.VisibleClipBounds), owner.ClientRectangle);
+            if (!bounds.IsEmpty) graphics.DrawImage(blurred ? frost : frame, bounds, bounds, GraphicsUnit.Pixel);
         }
-        private void EnsureFrame()
+        private void EnsureFrame(bool animated)
         {
             int width = owner.ClientSize.Width, height = owner.ClientSize.Height;
             if (baseline == null || baseline.Width != width || baseline.Height != height)
             {
-                ClearImages(); baseline = new Bitmap(width, height); frame = new Bitmap(width, height);
-                frost = new Bitmap(width, height);
-                thumbnail = new Bitmap(Math.Max(2, width / 18), Math.Max(2, height / 18));
-                using (var graphics = Graphics.FromImage(baseline))
+                ClearImages(); baseline = new Bitmap(width, height); frame = new Bitmap(width, height); frost = new Bitmap(width, height);
+                float scale = owner.DeviceDpi / 96F;
+                using (var font = new Font("Consolas", 11 * scale, FontStyle.Regular, GraphicsUnit.Pixel))
                 {
-                    Glass.CanvasBackground(graphics, owner.ClientRectangle);
-                    DrawGrid(graphics, false);
+                    for (int i = 0; i < glyphs.Length; i++)
+                    {
+                        glyphs[i] = new Bitmap((int)Math.Ceiling(32 * scale), (int)Math.Ceiling(32 * scale));
+                        using (var g = Graphics.FromImage(glyphs[i]))
+                        using (var halo = new SolidBrush(Color.FromArgb(i * 20 / 31, Glass.Cyan)))
+                        using (var ink = new SolidBrush(Glass.Mix(Color.FromArgb(32, 39, 49), Glass.Cyan, i / 31.0)))
+                        {
+                            if (i > 0) g.FillEllipse(halo, 2 * scale, scale, 22 * scale, 22 * scale);
+                            g.DrawString(">", font, ink, 9 * scale, 9 * scale, StringFormat.GenericTypographic);
+                        }
+                    }
+                }
+                using (var g = Graphics.FromImage(baseline))
+                {
+                    g.Clear(Glass.Canvas);
+                    if (!SystemInformation.HighContrast)
+                        for (float y = 14 * scale; y < height; y += 28 * scale)
+                        for (float x = 14 * scale; x < width; x += 28 * scale)
+                            g.DrawImageUnscaled(glyphs[0], (int)(x - 9 * scale), (int)(y - 9 * scale));
+                }
+                using (var g = Graphics.FromImage(frame)) g.DrawImageUnscaled(baseline, Point.Empty);
+                // Frost is static. Rebuild only on resize/DPI change, never on
+                // pointer movement, clicks, hover, or page animation frames.
+                using (var small = new Bitmap(Math.Max(2,width/18), Math.Max(2,height/18)))
+                {
+                    using (var g = Graphics.FromImage(small)) { g.InterpolationMode = InterpolationMode.HighQualityBilinear; g.DrawImage(baseline, new Rectangle(Point.Empty, small.Size)); }
+                    using (var g = Graphics.FromImage(frost)) { g.InterpolationMode = InterpolationMode.HighQualityBilinear; g.DrawImage(small, new Rectangle(Point.Empty, frost.Size)); }
                 }
                 dirty = true;
             }
-            if (!dirty) return;
+            if (!animated || !dirty) return;
+            double now = clock.Elapsed.TotalSeconds;
+            Rectangle next = ActiveArea(now), area = previousArea.IsEmpty ? next : next.IsEmpty ? previousArea : Rectangle.Union(previousArea, next);
+            if (!area.IsEmpty)
             using (var graphics = Graphics.FromImage(frame))
             {
-                graphics.DrawImageUnscaled(baseline, Point.Empty);
-                if (!SystemInformation.HighContrast && GlassMotion.AnimationsEnabled() && (glow > 0 || waves.Count > 0)) DrawGrid(graphics, true);
+                graphics.SetClip(area);
+                graphics.DrawImage(baseline, area, area, GraphicsUnit.Pixel);
+                if (!SystemInformation.HighContrast && GlassMotion.AnimationsEnabled() && !next.IsEmpty) DrawGrid(graphics, next, now);
             }
-            // Blur once per scene frame. Every transparent child can then replay
-            // this cached image without resampling the whole window again.
-            using (var graphics = Graphics.FromImage(thumbnail))
-            { graphics.InterpolationMode = InterpolationMode.HighQualityBilinear; graphics.DrawImage(frame, new Rectangle(Point.Empty, thumbnail.Size)); }
-            using (var graphics = Graphics.FromImage(frost))
-            { graphics.InterpolationMode = InterpolationMode.HighQualityBilinear; graphics.DrawImage(thumbnail, new Rectangle(Point.Empty, frost.Size)); }
-            dirty = false;
+            previousArea = next; dirty = false;
         }
-        private void DrawGrid(Graphics graphics, bool reactive)
+        private void DrawGrid(Graphics graphics, Rectangle area, double now)
         {
-            if (SystemInformation.HighContrast) return;
             float scale = owner.DeviceDpi / 96F, spacing = 28 * scale;
-            double now = clock.Elapsed.TotalSeconds;
-            using (var font = new Font("Consolas", 11 * scale, FontStyle.Regular, GraphicsUnit.Pixel))
-            using (var quiet = new SolidBrush(Color.FromArgb(36, 33, 45)))
+            using (var erase = new SolidBrush(Glass.Canvas))
             {
-                for (float y = 14 * scale; y < owner.Height; y += spacing)
-                for (float x = 14 * scale; x < owner.Width; x += spacing)
+                float firstX = 14 * scale + Math.Max(0, (int)Math.Floor((area.Left - 14 * scale) / spacing)) * spacing;
+                float firstY = 14 * scale + Math.Max(0, (int)Math.Floor((area.Top - 14 * scale) / spacing)) * spacing;
+                for (float y = firstY; y < area.Bottom; y += spacing)
+                for (float x = firstX; x < area.Right; x += spacing)
                 {
-                    if (!reactive) { graphics.DrawString(">", font, quiet, x, y, StringFormat.GenericTypographic); continue; }
-                    double dx = x - pointer.X, dy = y - pointer.Y, distance = Math.Sqrt(dx * dx + dy * dy);
-                    double strength = Math.Max(0, 1 - distance / (145 * scale)) * glow, shiftX = 0, shiftY = 0;
-                    if (distance > 1) { shiftX = dx / distance * strength * 5 * scale; shiftY = dy / distance * strength * 5 * scale; }
+                    double dx = x-pointer.X, dy = y-pointer.Y, distance = Math.Sqrt(dx*dx+dy*dy);
+                    double strength = Math.Max(0,1-distance/(145*scale))*glow, shiftX=0, shiftY=0;
+                    if (distance>1) { shiftX=dx/distance*strength*5*scale; shiftY=dy/distance*strength*5*scale; }
                     foreach (var wave in waves)
                     {
-                        double age = now - wave.Started;
-                        double wx = x - wave.Center.X, wy = y - wave.Center.Y, radius = Math.Sqrt(wx * wx + wy * wy);
-                        double band = Math.Max(0, 1 - Math.Abs(radius - age * 420 * scale) / (45 * scale)) * Math.Max(0, 1 - age / 1.15);
-                        strength = Math.Min(1, strength + band);
-                        if (radius > 1) { shiftX += wx / radius * band * 7 * scale; shiftY += wy / radius * band * 7 * scale; }
+                        double age=now-wave.Started, wx=x-wave.Center.X, wy=y-wave.Center.Y, radius=Math.Sqrt(wx*wx+wy*wy);
+                        double band=Math.Max(0,1-Math.Abs(radius-age*420*scale)/(45*scale))*Math.Max(0,1-age/1.15);
+                        strength=Math.Min(1,strength+band);
+                        if (radius>1) { shiftX+=wx/radius*band*7*scale; shiftY+=wy/radius*band*7*scale; }
                     }
-                    if (strength < .01) continue;
-                    // Restore this cell before shifting its glyph, avoiding a doubled character.
-                    using (var ink = new SolidBrush(Glass.Canvas)) graphics.FillRectangle(ink, x - 9 * scale, y - 9 * scale, 27 * scale, 27 * scale);
-                    using (var halo = new SolidBrush(Color.FromArgb((int)(strength * 20), 178, 145, 222)))
-                        graphics.FillEllipse(halo, x - 7 * scale, y - 8 * scale, 22 * scale, 22 * scale);
-                    using (var ink = new SolidBrush(Glass.Mix(Color.FromArgb(36, 33, 45), Glass.Cyan, strength)))
-                        graphics.DrawString(">", font, ink, x + (float)shiftX, y + (float)shiftY, StringFormat.GenericTypographic);
+                    if (strength<.01) continue;
+                    graphics.FillRectangle(erase,x-9*scale,y-9*scale,27*scale,27*scale);
+                    graphics.DrawImageUnscaled(glyphs[Math.Min(31,Math.Max(1,(int)(strength*31)))],(int)(x-9*scale+shiftX),(int)(y-9*scale+shiftY));
                 }
             }
         }
         private void ClearImages()
         {
             if (baseline != null) baseline.Dispose(); if (frame != null) frame.Dispose(); if (frost != null) frost.Dispose();
-            if (thumbnail != null) thumbnail.Dispose(); baseline = frame = frost = thumbnail = null;
+            baseline=frame=frost=null; previousArea=Rectangle.Empty;
+            for(int i=0;i<glyphs.Length;i++) { if(glyphs[i]!=null) glyphs[i].Dispose(); glyphs[i]=null; }
         }
         public void Dispose()
         {
-            if (disposed) return; disposed = true; timer.Dispose(); waves.Clear(); ClearImages();
-            Application.RemoveMessageFilter(this); owner.Activated -= Activated; owner.Deactivate -= Deactivated;
-            owner.VisibleChanged -= Visibility; owner.SizeChanged -= Resize;
+            if (disposed) return; disposed=true; timer.Dispose(); waves.Clear(); ClearImages();
+            Application.RemoveMessageFilter(this); owner.Activated-=Activated; owner.Deactivate-=Deactivated;
+            owner.VisibleChanged-=Visibility; owner.SizeChanged-=Resize;
         }
     }
 

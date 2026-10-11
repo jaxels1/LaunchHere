@@ -4,7 +4,7 @@ LaunchHere makes apps open on the monitor where you click their taskbar icon, in
 
 It runs in the system tray, with a dark settings window, app exceptions and a local command launcher.
 
-The window has a grid of `>` characters that moves and glows near your cursor, with ripples when you click. Purple controls float above frosted panels. Pages blend smoothly when you switch tabs. Animations follow Windows settings and stop when the window is hidden or inactive.
+The window has a grid of `>` characters that moves and glows near your cursor, with ripples when you click. Muted blue controls sit above frosted panels. Tabs switch immediately, with a smoothly moving selection indicator. Background effects repaint only the exposed canvas, while panels stay cached. Animations follow Windows settings and stop when the window is hidden or inactive.
 
 ## Download
 
@@ -95,6 +95,6 @@ Installer and update handoff checks are in `Tests/InstallerChecks.ps1` and `Test
 
 ## Publishing a release
 
-Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.3` and attach the generated installer and portable ZIP.
+Run `./package.ps1 -IsccPath "C:\path\to\ISCC.exe"` to build the installer, portable ZIP and source ZIP. Upload the source files to GitHub, then create a release with the tag `v2.3.1` and attach the generated installer and portable ZIP.
 
-Keep the generated filenames: `LaunchHere-2.3-Setup-x64.exe` and `LaunchHere-2.3-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.
+Keep the generated filenames: `LaunchHere-2.3.1-Setup-x64.exe` and `LaunchHere-2.3.1-Windows-x64.zip` (using the new version number each release). The updater needs those assets and the SHA-256 digest GitHub supplies. It ignores drafts, prereleases and older versions.

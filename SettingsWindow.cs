@@ -65,10 +65,8 @@ namespace LaunchHere
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             var brand = new PictureBox { Image = BrandImage(app.AppIcon), BackColor = Color.Transparent, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(48, 48), Margin = new Padding(0, 6, 12, 0), AccessibleName = "LaunchHere logo" };
             header.Controls.Add(brand, 0, 0);
-            var title = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = Padding.Empty, BackColor = Color.Transparent };
-            title.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            var title = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 1, ColumnCount = 1, Margin = new Padding(0, 9, 0, 0), BackColor = Color.Transparent };
             title.Controls.Add(new Label { Text = "LaunchHere", Font = new Font("Segoe UI", 20F, FontStyle.Bold), AutoSize = true, Margin = Padding.Empty, ForeColor = Ink });
-            title.Controls.Add(new Label { Text = "YOUR APPS. YOUR DISPLAY.", Font = new Font("Consolas", 8F), ForeColor = Glass.Cyan, AutoSize = true, Margin = new Padding(2, 6, 0, 0) });
             header.Controls.Add(title, 1, 0);
             badge = new GlassBadge { TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Top, Height = 36, Margin = new Padding(8, 13, 0, 0), Font = new Font("Segoe UI", 10F, FontStyle.Bold), AccessibleName = "App status" };
             header.Controls.Add(badge, 2, 0);
@@ -487,7 +485,7 @@ namespace LaunchHere
                 retries.Checked = app.Settings.RetryMovement;
                 timeout.Value = app.Settings.LaunchTimeoutSeconds;
                 badge.Text = app.Settings.Enabled ? "●  Enabled" : "●  Paused";
-                badge.BackColor = app.Settings.Enabled ? Color.FromArgb(41, 31, 54) : Color.FromArgb(48, 41, 30);
+                badge.BackColor = app.Settings.Enabled ? Color.FromArgb(26, 40, 57) : Color.FromArgb(48, 41, 30);
                 badge.ForeColor = app.Settings.Enabled ? Glass.Cyan : Color.FromArgb(220, 190, 142);
                 footer.Text = Screen.AllScreens.Length + " displays  /  " + UpdateClient.DisplayVersion(UpdateClient.CurrentVersion) + "  /  " + app.SaveNotice;
                 RefreshLauncher();
@@ -570,7 +568,6 @@ namespace LaunchHere
         private readonly System.Collections.Generic.List<Button> buttons = new System.Collections.Generic.List<Button>();
         private readonly GlassMotion pageMotion;
         private readonly PageBlend blend;
-        private bool filtering;
         private int selected;
         internal event EventHandler SelectionChanged;
         internal int TabCount { get { return pages.Count; } }
@@ -581,17 +578,13 @@ namespace LaunchHere
             {
                 if (value < 0 || value >= pages.Count) return;
                 bool changed = selected != value;
-                Bitmap previous = null;
                 bool animate = changed && Visible && IsHandleCreated && content.Width > 0 && content.Height > 0 && (long)content.Width * content.Height <= 4000000 && GlassMotion.AnimationsEnabled();
-                if (animate)
-                {
-                    try { previous = blend.Visible ? blend.CaptureFrame() : CapturePage(pages[selected]); }
-                    catch (ArgumentException) { animate = false; }
-                    catch (System.Runtime.InteropServices.ExternalException) { animate = false; }
-                }
-                int direction = value > selected ? 1 : -1;
+                Rectangle oldTab = pageMotion != null && pageMotion.Running ? blend.Position : buttons[selected].Bounds;
                 if (changed && pageMotion != null) pageMotion.Finish();
                 selected = value;
+                content.SuspendLayout(); navigation.SuspendLayout();
+                try
+                {
                 for (int i = 0; i < pages.Count; i++)
                 {
                     pages[i].Visible = i == value;
@@ -599,22 +592,14 @@ namespace LaunchHere
                     buttons[i].ForeColor = SystemInformation.HighContrast ? i == value ? SystemColors.HighlightText : SystemColors.ControlText : i == value ? Color.White : Glass.Muted;
                 }
                 pages[value].BringToFront();
-                if (animate && previous != null)
-                {
-                    Bitmap next = null;
-                    try
-                    {
-                        pages[value].PerformLayout(); next = CapturePage(pages[value]);
-                        blend.SetFrames(previous, next, direction); previous = next = null;
-                        pageMotion.Snap(0); blend.Visible = true; blend.BringToFront();
-                        filtering = true; Application.AddMessageFilter(this);
-                        pageMotion.MoveTo(1, 300);
-                    }
-                    catch (ArgumentException) { pageMotion.Finish(); }
-                    catch (System.Runtime.InteropServices.ExternalException) { pageMotion.Finish(); }
-                    finally { if (previous != null) previous.Dispose(); if (next != null) next.Dispose(); }
                 }
-                else if (previous != null) previous.Dispose();
+                finally { navigation.ResumeLayout(true); content.ResumeLayout(true); }
+                if (changed)
+                {
+                    blend.SetPositions(oldTab, buttons[value].Bounds);
+                    pageMotion.Snap(0);
+                    if (animate) pageMotion.MoveTo(1, 180); else pageMotion.Snap(1);
+                }
                 if (changed && SelectionChanged != null) SelectionChanged(this, EventArgs.Empty);
             }
         }
@@ -628,47 +613,30 @@ namespace LaunchHere
             Controls.Add(layout);
             navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, BackColor = Color.Transparent };
             content = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
-            layout.Controls.Add(navigation, 0, 0);
+            var navigationHost = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
+            navigationHost.Controls.Add(navigation);
+            layout.Controls.Add(navigationHost, 0, 0);
             layout.Controls.Add(content, 0, 1);
-            blend = new PageBlend { Dock = DockStyle.Fill, Visible = false, TabStop = false, AccessibleRole = AccessibleRole.None };
-            content.Controls.Add(blend);
+            blend = new PageBlend { Dock = DockStyle.Bottom, Height = 3, TabStop = false, AccessibleRole = AccessibleRole.None };
+            navigationHost.Controls.Add(blend); blend.BringToFront();
             pageMotion = new GlassMotion(this, 1, MovePage);
             content.SizeChanged += delegate { pageMotion.Finish(); };
         }
         private void MovePage()
         {
             if (blend == null) return;
-            if (pageMotion.Value >= 1)
-            {
-                blend.Visible = false; blend.ClearFrames();
-                if (filtering) { Application.RemoveMessageFilter(this); filtering = false; }
-            }
-            else { blend.Progress = pageMotion.Value; blend.Invalidate(); }
-        }
-        private static Bitmap CapturePage(Control page)
-        {
-            var bitmap = new Bitmap(Math.Max(1, page.Width), Math.Max(1, page.Height));
-            try { page.DrawToBitmap(bitmap, page.ClientRectangle); return bitmap; }
-            catch { bitmap.Dispose(); throw; }
+            blend.Progress = pageMotion.Value; blend.Invalidate();
         }
         public bool PreFilterMessage(ref Message message)
         {
-            // The overlay is hit-test transparent. Finish before delivering input
-            // to the live page so a user's first click or keystroke takes effect.
-            if (filtering && (message.Msg == 0x201 || message.Msg == 0x204 || message.Msg == 0x207 || message.Msg == 0x20A || message.Msg == 0x100 || message.Msg == 0x104))
-            {
-                for (Control control = Control.FromChildHandle(message.HWnd); control != null; control = control.Parent)
-                    if (control == content) { pageMotion.Finish(); break; }
-            }
+            // Selection animation never covers the live page or consumes input.
             return false;
         }
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                if (filtering) { Application.RemoveMessageFilter(this); filtering = false; }
                 if (pageMotion != null) pageMotion.Dispose();
-                if (blend != null) blend.ClearFrames();
             }
             base.Dispose(disposing);
         }
@@ -696,51 +664,31 @@ namespace LaunchHere
 
     internal sealed class PageBlend : Control
     {
-        private Bitmap previous, next;
-        private int direction;
-        internal double Progress;
-        internal bool HasFrames { get { return previous != null || next != null; } }
+        private Rectangle previous, next;
+        internal double Progress = 1;
+        internal Rectangle Position { get { return CurrentPosition(); } }
         internal PageBlend() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Opaque, true); }
-        internal void SetFrames(Bitmap oldPage, Bitmap newPage, int slideDirection)
+        internal void SetPositions(Rectangle oldTab, Rectangle newTab)
         {
-            ClearFrames(); previous = oldPage; next = newPage; direction = slideDirection; Progress = 0;
+            if(Progress < 1) oldTab = CurrentPosition();
+            previous = oldTab; next = newTab; Progress = 0;
         }
-        internal Bitmap CaptureFrame()
+        private Rectangle CurrentPosition()
         {
-            var frame = new Bitmap(Math.Max(1, Width), Math.Max(1, Height));
-            try { using (var graphics = Graphics.FromImage(frame)) PaintFrame(graphics); return frame; }
-            catch { frame.Dispose(); throw; }
+            return new Rectangle((int)Math.Round(previous.Left+(next.Left-previous.Left)*Progress),0,
+                (int)Math.Round(previous.Width+(next.Width-previous.Width)*Progress),Height);
         }
-        private void PaintFrame(Graphics graphics)
+        protected override void OnPaint(PaintEventArgs e)
         {
-            Glass.ParentBackground(graphics, this);
-            double t = Math.Max(0, Math.Min(1, Progress));
-            int shift = (int)Math.Round(18 * DeviceDpi / 96F);
-            DrawLayer(graphics, previous, -(int)Math.Round(direction * shift * t), 1 - t);
-            DrawLayer(graphics, next, (int)Math.Round(direction * shift * (1 - t)), t);
+            Glass.ParentBackground(e.Graphics,this);
+            var position = CurrentPosition(); position.Inflate(-8 * DeviceDpi / 96,0);
+            if(position.Width>0) using(var brush=new SolidBrush(SystemInformation.HighContrast ? SystemColors.Highlight : Glass.Cyan)) e.Graphics.FillRectangle(brush,position);
         }
-        private static void DrawLayer(Graphics graphics, Bitmap image, int x, double alpha)
-        {
-            if (image == null || alpha <= 0) return;
-            using (var attributes = new System.Drawing.Imaging.ImageAttributes())
-            {
-                var matrix = new System.Drawing.Imaging.ColorMatrix { Matrix33 = (float)alpha };
-                attributes.SetColorMatrix(matrix);
-                graphics.DrawImage(image, new Rectangle(x, 0, image.Width, image.Height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
-            }
-        }
-        protected override void OnPaint(PaintEventArgs e) { PaintFrame(e.Graphics); }
         protected override void WndProc(ref Message message)
         {
-            if (message.Msg == 0x84) { message.Result = new IntPtr(-1); return; }
+            if(message.Msg==0x84) { message.Result=new IntPtr(-1); return; }
             base.WndProc(ref message);
         }
-        internal void ClearFrames()
-        {
-            if (previous != null) { previous.Dispose(); previous = null; }
-            if (next != null) { next.Dispose(); next = null; }
-        }
-        protected override void Dispose(bool disposing) { if (disposing) ClearFrames(); base.Dispose(disposing); }
     }
 
     internal sealed class DisplayMap : Control
@@ -767,7 +715,7 @@ namespace LaunchHere
             foreach (var screen in screens)
             {
                 var rect = new RectangleF(ox + (screen.Bounds.Left - union.Left) * scale + 2, oy + (screen.Bounds.Top - union.Top) * scale + 2, Math.Max(10, screen.Bounds.Width * scale - 4), Math.Max(10, screen.Bounds.Height * scale - 4));
-                Color fill = SystemInformation.HighContrast ? SystemColors.Control : screen.Primary ? Color.FromArgb(51, 37, 70) : Glass.ButtonBottom;
+                Color fill = SystemInformation.HighContrast ? SystemColors.Control : screen.Primary ? Color.FromArgb(28, 44, 64) : Glass.ButtonBottom;
                 Color stroke = SystemInformation.HighContrast ? SystemColors.ControlText : screen.Primary ? Glass.Cyan : Glass.Muted;
                 using (var path = Glass.Rounded(rect, 8 * DeviceDpi / 96F))
                 {

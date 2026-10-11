@@ -4,5 +4,5 @@ using System.Runtime.Versioning;
 [assembly: AssemblyTitle("LaunchHere")]
 [assembly: AssemblyDescription("Open app windows on the display whose taskbar you click.")]
 [assembly: AssemblyProduct("LaunchHere")]
-[assembly: AssemblyVersion("2.3.0.0")]
-[assembly: AssemblyFileVersion("2.3.0.0")]
+[assembly: AssemblyVersion("2.3.1.0")]
+[assembly: AssemblyFileVersion("2.3.1.0")]
