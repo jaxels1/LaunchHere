@@ -13,6 +13,7 @@ namespace LaunchHere
     internal static class SettingsChecks
     {
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
         private static int count;
         private sealed class UpdateRequests { internal int Count, Delay = 40; }
         private sealed class UpdateHandler : HttpMessageHandler
@@ -64,6 +65,22 @@ namespace LaunchHere
                 CheckFlows(child);
             }
         }
+        private static void CheckNativeScrolling(Control parent)
+        {
+            foreach (Control child in parent.Controls)
+            {
+                var flow = child as GlassFlow;
+                if (flow != null && flow.Visible && flow.VerticalScroll.Visible)
+                {
+                    flow.AutoScrollPosition = Point.Empty;
+                    SendMessage(flow.Handle, 0x115, new IntPtr(1), IntPtr.Zero);
+                    Application.DoEvents();
+                    Check(flow.AutoScrollPosition.Y < 0, "styled scrollbar retains native line scrolling");
+                    flow.AutoScrollPosition = Point.Empty;
+                }
+                CheckNativeScrolling(child);
+            }
+        }
         private static void CheckClippedPainting(Control control)
         {
             using (control)
@@ -89,6 +106,49 @@ namespace LaunchHere
                 Check(changedInside > 0 && changedOutside == 0, control.GetType().Name + " respects translated graphics and clipping");
             }
         }
+        private static void CheckSurfaceContinuity(Control control, bool insideCard)
+        {
+            using (control)
+            using (var form = new GlassForm { ClientSize = new Size(520, 350) })
+            using (var card = new GlassCard { Bounds = new Rectangle(30, 80, 460, 230) })
+            using (var panel = new Panel { Bounds = new Rectangle(20, 25, 400, 100), BackColor = Color.Transparent })
+            using (var reference = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
+            using (var painted = new Bitmap(160, 38))
+            {
+                form.Controls.Add(card);
+                (insideCard ? (Control)card : form).Controls.Add(panel);
+                control.AutoSize = false; control.Bounds = new Rectangle(10, 10, 160, 38);
+                control.Text = ""; panel.Controls.Add(control);
+                // A sibling must never be replayed into the control's background.
+                panel.Controls.Add(new Label { Text = "SIBLING", ForeColor = Color.Magenta, AutoSize = true, Location = new Point(200, 10) });
+                var background = typeof(Control).GetMethod("OnPaintBackground", BindingFlags.NonPublic | BindingFlags.Instance);
+                using (var graphics = Graphics.FromImage(reference))
+                {
+                    background.Invoke(form, new object[] { new PaintEventArgs(graphics, form.ClientRectangle) });
+                    if (insideCard)
+                    {
+                        graphics.TranslateTransform(card.Left, card.Top);
+                        graphics.SetClip(card.ClientRectangle);
+                        background.Invoke(card, new object[] { new PaintEventArgs(graphics, card.ClientRectangle) });
+                    }
+                }
+                using (var graphics = Graphics.FromImage(painted))
+                {
+                    graphics.SetClip(control.ClientRectangle);
+                    control.GetType().GetMethod("OnPaint", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(control,
+                        new object[] { new PaintEventArgs(graphics, control.ClientRectangle) });
+                }
+                var origin = new Point(panel.Left + control.Left, panel.Top + control.Top);
+                if (insideCard) origin.Offset(card.Location);
+                bool seamless = true;
+                foreach (var corner in new[] { Point.Empty, new Point(159, 0), new Point(0, 37), new Point(159, 37) })
+                {
+                    Color expected = reference.GetPixel(origin.X + corner.X, origin.Y + corner.Y), actual = painted.GetPixel(corner.X, corner.Y);
+                    seamless &= Math.Abs(expected.R - actual.R) <= 2 && Math.Abs(expected.G - actual.G) <= 2 && Math.Abs(expected.B - actual.B) <= 2;
+                }
+                Check(seamless, control.GetType().Name + " corners match the " + (insideCard ? "nested card" : "window") + " background");
+            }
+        }
         [STAThread] private static int Main(string[] args)
         {
             try
@@ -99,6 +159,12 @@ namespace LaunchHere
                 CheckClippedPainting(new GlassToggle());
                 CheckClippedPainting(new GlassButton());
                 CheckClippedPainting(new DisplayMap());
+                CheckClippedPainting(new GlassBadge());
+                CheckSurfaceContinuity(new GlassButton(), false);
+                CheckSurfaceContinuity(new GlassButton(), true);
+                CheckSurfaceContinuity(new GlassToggle(), true);
+                CheckSurfaceContinuity(new GlassBadge(), false);
+                CheckSurfaceContinuity(new DisplayMap(), true);
                 string path = Path.Combine(folder, "test-settings.json");
                 var store = new SettingsStore(path);
                 string migrationFolder = Path.Combine(folder, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(migrationFolder);
@@ -150,6 +216,12 @@ namespace LaunchHere
                     Find<NumericUpDown>(window, "Launch detection timeout in seconds").Value = 20;
                     loaded = store.Load(out notice);
                     Check(!loaded.ThumbnailPreviews && !loaded.RetryMovement && loaded.LaunchTimeoutSeconds == 20, "behavior controls save to disk");
+                    var number = Find<NumericUpDown>(window, "Launch detection timeout in seconds");
+                    number.UpButton();
+                    Check(number.Value == 21 && store.Load(out notice).LaunchTimeoutSeconds == 21, "styled number spinner still increments and saves");
+                    number.DownButton();
+                    Check(number.Value == 20 && store.Load(out notice).LaunchTimeoutSeconds == 20, "styled number spinner still decrements and saves");
+                    CheckNativeScrolling(window);
                     tabs.SelectedIndex = 1; Application.DoEvents();
                     var input = Find<TextBox>(window, "App process name, for example game.exe");
                     input.Text = "game.exe"; FindButton(window, "&Add").PerformClick();
