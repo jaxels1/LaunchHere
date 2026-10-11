@@ -8,6 +8,10 @@ using System.Windows.Forms;
 namespace LaunchHere {
 internal static class AnimationBenchmark {
     static void Pump(int ms) { var s=Stopwatch.StartNew(); while(s.ElapsedMilliseconds<ms) { Application.DoEvents(); Thread.Sleep(2); } }
+    static void UpdateCanvas(Control control) {
+        control.Update();
+        foreach(Control child in control.Controls) if(child.Visible && !(child is GlassCard)) UpdateCanvas(child);
+    }
     [STAThread] static int Main(string[] args) {
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
         Directory.CreateDirectory(args[0]);
@@ -27,6 +31,12 @@ internal static class AnimationBenchmark {
                 for(int i=0;i<60;i++) { window.Scene.MovePointer(new Point(80+i*8,120)); tick.Invoke(window.Scene,new object[]{null,EventArgs.Empty}); window.Scene.Draw(g,false); }
                 Console.WriteLine("Scene render mean ms: "+(s.Elapsed.TotalMilliseconds/60).ToString("F2"));
             }
+            var live=Stopwatch.StartNew();
+            for(int i=0;i<60;i++) {
+                window.Scene.MovePointer(new Point(80+i*8,24*window.DeviceDpi/96));
+                tick.Invoke(window.Scene,new object[]{null,EventArgs.Empty}); UpdateCanvas(window);
+            }
+            Console.WriteLine("Live canvas paint mean ms: "+(live.Elapsed.TotalMilliseconds/60).ToString("F2"));
             deactivate.Invoke(window,new object[]{EventArgs.Empty}); Pump(100);
             using(var image=new Bitmap(window.Width,window.Height)) {
                 window.DrawToBitmap(image,new Rectangle(Point.Empty,window.Size));

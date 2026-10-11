@@ -50,7 +50,7 @@ namespace LaunchHere
             MinimumSize = new Size(820, 720);
             StartPosition = FormStartPosition.Manual;
             KeyPreview = true;
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = Padding.Empty, BackColor = Color.Transparent };
+            var root = new CanvasTable { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = Padding.Empty, BackColor = Color.Transparent };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
@@ -59,13 +59,13 @@ namespace LaunchHere
             Controls.Add(root);
             root.SizeChanged += delegate { int inset = Math.Max(0, (root.Width - 1020 * DeviceDpi / 96) / 2); root.Padding = new Padding(inset, 0, inset, 0); };
 
-            var header = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(28, 20, 28, 12), ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
+            var header = new CanvasTable { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(28, 20, 28, 12), ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            var brand = new PictureBox { Image = BrandImage(app.AppIcon), BackColor = Color.Transparent, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(48, 48), Margin = new Padding(0, 6, 12, 0), AccessibleName = "LaunchHere logo" };
+            var brand = new CanvasPicture { Image = BrandImage(app.AppIcon), BackColor = Color.Transparent, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(48, 48), Margin = new Padding(0, 6, 12, 0), AccessibleName = "LaunchHere logo" };
             header.Controls.Add(brand, 0, 0);
-            var title = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 1, ColumnCount = 1, Margin = new Padding(0, 9, 0, 0), BackColor = Color.Transparent };
+            var title = new CanvasTable { Dock = DockStyle.Fill, RowCount = 1, ColumnCount = 1, Margin = new Padding(0, 9, 0, 0), BackColor = Color.Transparent };
             title.Controls.Add(new Label { Text = "LaunchHere", Font = new Font("Segoe UI", 20F, FontStyle.Bold), AutoSize = true, Margin = Padding.Empty, ForeColor = Ink });
             header.Controls.Add(title, 1, 0);
             badge = new GlassBadge { TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Top, Height = 36, Margin = new Padding(8, 13, 0, 0), Font = new Font("Segoe UI", 10F, FontStyle.Bold), AccessibleName = "App status" };
@@ -186,7 +186,7 @@ namespace LaunchHere
             aboutFlow.Controls.Add(TextCard("Get started", "1. Show the taskbar on all displays in Windows taskbar settings.\n2. Click an app on your preferred display's taskbar.\n3. Close or minimize this window to keep the app running in the tray."));
             aboutFlow.Controls.Add(TextCard("A few things to know", "Windows does not identify which app a taskbar click launches, so LaunchHere watches new windows and the next eligible activation. Early positioning reduces the flash on the old display, but some apps can still briefly appear there. Unrelated apps opening soon afterward can sometimes be moved. Slow launches, administrator apps, and exclusive fullscreen games may need manual movement."));
 
-            var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(24, 14, 24, 12), Margin = Padding.Empty, BackColor = Color.Transparent };
+            var bottom = new CanvasTable { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(24, 14, 24, 12), Margin = Padding.Empty, BackColor = Color.Transparent };
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
@@ -560,7 +560,7 @@ namespace LaunchHere
         protected override bool ShowWithoutActivation { get { return true; } }
     }
 
-    internal sealed class SettingsPages : Panel, IMessageFilter
+    internal sealed class SettingsPages : CanvasPanel, IMessageFilter
     {
         private readonly FlowLayoutPanel navigation;
         private readonly Panel content;
@@ -606,14 +606,14 @@ namespace LaunchHere
         internal SettingsPages()
         {
             BackColor = Color.Transparent;
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = Padding.Empty, BackColor = Color.Transparent };
+            var layout = new CanvasTable { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = Padding.Empty, BackColor = Color.Transparent };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(layout);
-            navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, BackColor = Color.Transparent };
-            content = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
-            var navigationHost = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
+            navigation = new CanvasFlow { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty, BackColor = Color.Transparent };
+            content = new CanvasPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
+            var navigationHost = new CanvasPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
             navigationHost.Controls.Add(navigation);
             layout.Controls.Add(navigationHost, 0, 0);
             layout.Controls.Add(content, 0, 1);
@@ -643,7 +643,7 @@ namespace LaunchHere
         internal Panel AddPage(string title)
         {
             int index = pages.Count;
-            var page = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 10, 0, 0), BackColor = Color.Transparent };
+            var page = new CanvasPanel { Dock = DockStyle.Fill, Padding = new Padding(0, 10, 0, 0), BackColor = Color.Transparent };
             var button = new GlassButton { Text = title, AccessibleName = title.Replace("&&", "&") + " page", AutoSize = true, MinimumSize = new Size(140, 40), Padding = new Padding(18, 4, 18, 4), Margin = new Padding(0, 0, 8, 0), TabIndex = index };
             button.FlatAppearance.BorderSize = 0;
             button.Click += delegate { SelectedIndex = index; };

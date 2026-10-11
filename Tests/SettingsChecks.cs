@@ -14,7 +14,13 @@ namespace LaunchHere
     {
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern bool BitBlt(IntPtr target, int x, int y, int width, int height, IntPtr source, int sourceX, int sourceY, uint operation);
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")] private static extern int DwmFlush();
         private static int count;
+        private static string liveProofFolder;
         private sealed class UpdateRequests { internal int Count, Delay = 40; }
         private sealed class UpdateHandler : HttpMessageHandler
         {
@@ -93,6 +99,108 @@ namespace LaunchHere
                 Check(!window.Scene.PreFilterMessage(ref click) && window.Scene.RippleCount>0,area+" click starts a ripple without consuming input");
             }
             deactivate.Invoke(window,new object[]{EventArgs.Empty}); Application.DoEvents();
+        }
+        private static Bitmap CaptureLiveWindow(SettingsWindow window)
+        {
+            // Read only our own test window's already painted client pixels.
+            // DrawToBitmap would force a repaint and hide missing WM_PAINT backgrounds.
+            DwmFlush();
+            var image = new Bitmap(window.ClientSize.Width, window.ClientSize.Height);
+            IntPtr source = GetDC(window.Handle);
+            try
+            {
+                using (var graphics = Graphics.FromImage(image))
+                {
+                    IntPtr target = graphics.GetHdc();
+                    try { if (!BitBlt(target, 0, 0, image.Width, image.Height, source, 0, 0, 0x00CC0020)) throw new Exception("Own-window capture failed"); }
+                    finally { graphics.ReleaseHdc(target); }
+                }
+            }
+            catch { image.Dispose(); throw; }
+            finally { ReleaseDC(window.Handle, source); }
+            return image;
+        }
+        private static Control CanvasSurfaceAt(Control parent, Point location)
+        {
+            foreach (Control child in parent.Controls)
+            {
+                if (!child.Visible || !child.Bounds.Contains(location)) continue;
+                var local = new Point(location.X - child.Left, location.Y - child.Top);
+                if (child.Region != null && !child.Region.IsVisible(local)) continue;
+                return CanvasSurfaceAt(child, local);
+            }
+            return parent;
+        }
+        private static void PumpCanvas(int milliseconds)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (clock.ElapsedMilliseconds < milliseconds) { Application.DoEvents(); Thread.Sleep(2); }
+        }
+        private static bool LivePixelsChanged(Bitmap before, Bitmap after, Point location)
+        {
+            var area = Rectangle.Intersect(new Rectangle(location.X - 40, location.Y - 40, 80, 80), new Rectangle(Point.Empty, before.Size));
+            for (int y = area.Top; y < area.Bottom; y++)
+            for (int x = area.Left; x < area.Right; x++) if (before.GetPixel(x, y) != after.GetPixel(x, y)) return true;
+            return false;
+        }
+        private static void UpdatePendingCanvas(Control control)
+        {
+            // Update processes existing invalid areas; it does not invalidate or
+            // force a new drawing as Refresh/DrawToBitmap would.
+            control.Update();
+            foreach (Control child in control.Controls) if (child.Visible && !(child is GlassCard)) UpdatePendingCanvas(child);
+        }
+        private static void SettleTestPointer(SettingsWindow window, Point location)
+        {
+            // A real cursor can send unrelated moves while the test window is
+            // visible. Set the test pointer after pumping those messages, then
+            // let the normal scene invalidation and WM_PAINT path draw it.
+            window.Scene.MovePointer(location); Thread.Sleep(20);
+            typeof(ChevronScene).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window.Scene, new object[] { null, EventArgs.Empty });
+            UpdatePendingCanvas(window);
+        }
+        private static void CheckLiveCanvas(SettingsWindow window, Point location, string area)
+        {
+            if (!GlassMotion.AnimationsEnabled()) return;
+            var activate = typeof(Form).GetMethod("OnActivated", BindingFlags.NonPublic | BindingFlags.Instance);
+            var deactivate = typeof(Form).GetMethod("OnDeactivate", BindingFlags.NonPublic | BindingFlags.Instance);
+            bool previousTopMost = window.TopMost;
+            try
+            {
+                window.TopMost = true;
+                deactivate.Invoke(window, new object[] { EventArgs.Empty }); PumpCanvas(150);
+                var target = CanvasSurfaceAt(window, location);
+                var local = target.PointToClient(window.PointToScreen(location));
+                IntPtr position = new IntPtr((local.Y << 16) | (local.X & 0xffff));
+                using (var before = CaptureLiveWindow(window))
+                {
+                    activate.Invoke(window, new object[] { EventArgs.Empty });
+                    Check(PostMessage(target.Handle, 0x200, IntPtr.Zero, position), area + " receives normal queued mouse input");
+                    PumpCanvas(100);
+                    SettleTestPointer(window, location);
+                    using (var hovered = CaptureLiveWindow(window))
+                    {
+                        if (!LivePixelsChanged(before, hovered, location))
+                        {
+                            Console.WriteLine("Live canvas diagnostic: " + area + " at " + location + "; target=" + target.GetType().Name + "; target pointer=" + typeof(ChevronScene).GetField("target", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(window.Scene) + "; running=" + window.Scene.Running);
+                            before.Save(Path.Combine(liveProofFolder, area.Replace(' ', '-') + "-before.png"));
+                            hovered.Save(Path.Combine(liveProofFolder, area.Replace(' ', '-') + "-hover.png"));
+                        }
+                        Check(LivePixelsChanged(before, hovered, location), area + " visibly reacts without a forced repaint");
+                        Check(PostMessage(target.Handle, 0x201, IntPtr.Zero, position), area + " receives normal queued clicks");
+                        Check(PostMessage(target.Handle, 0x202, IntPtr.Zero, position), area + " releases normal mouse capture after clicking");
+                        PumpCanvas(100);
+                        SettleTestPointer(window, location);
+                        Check(window.Scene.RippleCount > 0, area + " click creates a ripple through the real message loop");
+                        using (var clicked = CaptureLiveWindow(window)) Check(LivePixelsChanged(hovered, clicked, location), area + " displays the click ripple live");
+                    }
+                }
+            }
+            finally
+            {
+                deactivate.Invoke(window, new object[] { EventArgs.Empty }); PumpCanvas(50);
+                window.TopMost = previousTopMost;
+            }
         }
         private static void CheckFlows(Control parent)
         {
@@ -478,6 +586,17 @@ namespace LaunchHere
                     CheckCanvasLeaf(window,FindLabel(window,"LaunchHere"),"header title background");
                     CheckCanvasLeaf(window,Find<Label>(window,"Save status"),"footer status background");
                     CheckCanvasLeaf(window,(FlowLayoutPanel)typeof(SettingsPages).GetField("navigation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(tabs),"tab strip background");
+                    float canvasScale = window.DeviceDpi / 96F;
+                    liveProofFolder = folder;
+                    var logo = Find<PictureBox>(window, "LaunchHere logo");
+                    var nav = (FlowLayoutPanel)typeof(SettingsPages).GetField("navigation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(tabs);
+                    Check(launcher.Region != null && !launcher.Region.IsVisible(0, 0) && launcher.Region.IsVisible(launcher.Width / 2, launcher.Height / 2), "cached launcher leaves rounded corner gaps open to the live canvas");
+                    CheckLiveCanvas(window, new Point(window.ClientSize.Width / 2, (int)(14 * canvasScale)), "top header gap");
+                    CheckLiveCanvas(window, window.PointToClient(logo.PointToScreen(new Point(2, 2))), "logo background");
+                    CheckLiveCanvas(window, window.PointToClient(FindLabel(window,"LaunchHere").PointToScreen(new Point(20, 12))), "title background");
+                    CheckLiveCanvas(window, window.PointToClient(launcher.PointToScreen(new Point(2, 2))), "launcher rounded corner");
+                    CheckLiveCanvas(window, window.PointToClient(launcher.PointToScreen(new Point(-4, launcher.Height / 2))), "launcher outside margin");
+                    CheckLiveCanvas(window, window.PointToClient(nav.PointToScreen(new Point(nav.Width - 20, nav.Height / 2))), "top navigation gap");
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
                     Application.DoEvents();

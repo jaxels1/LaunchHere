@@ -242,6 +242,45 @@ namespace LaunchHere
         }
         public void Dispose() { motion.Dispose(); }
     }
+    // Canvas containers must paint their background during WM_PAINT. Ordinary
+    // WinForms panels rely on WM_ERASEBKGND, which the small native animation
+    // invalidations deliberately omit to avoid flicker and child repaint cascades.
+    internal class CanvasPanel : Panel
+    {
+        internal CanvasPanel() { DoubleBuffered = true; BackColor = Color.Transparent; }
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (SystemInformation.HighContrast) base.OnPaintBackground(e);
+            else Glass.ParentBackground(e.Graphics, this);
+        }
+    }
+    internal sealed class CanvasTable : TableLayoutPanel
+    {
+        internal CanvasTable() { DoubleBuffered = true; BackColor = Color.Transparent; }
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (SystemInformation.HighContrast) base.OnPaintBackground(e);
+            else Glass.ParentBackground(e.Graphics, this);
+        }
+    }
+    internal sealed class CanvasFlow : FlowLayoutPanel
+    {
+        internal CanvasFlow() { DoubleBuffered = true; BackColor = Color.Transparent; }
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (SystemInformation.HighContrast) base.OnPaintBackground(e);
+            else Glass.ParentBackground(e.Graphics, this);
+        }
+    }
+    internal sealed class CanvasPicture : PictureBox
+    {
+        internal CanvasPicture() { DoubleBuffered = true; BackColor = Color.Transparent; }
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (SystemInformation.HighContrast) base.OnPaintBackground(e);
+            else Glass.ParentBackground(e.Graphics, this);
+        }
+    }
     internal class GlassForm : Form
     {
         internal readonly ChevronScene Scene;
@@ -265,6 +304,23 @@ namespace LaunchHere
         {
             DoubleBuffered = true; BackColor = Color.Transparent;
             SetStyle(ControlStyles.ResizeRedraw, true);
+        }
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            UpdateShape(); base.OnSizeChanged(e);
+        }
+        protected override void OnDpiChangedAfterParent(EventArgs e)
+        {
+            UpdateShape(); base.OnDpiChangedAfterParent(e);
+        }
+        private void UpdateShape()
+        {
+            // Let the live canvas show through the rounded corners instead of
+            // covering those gaps with pixels from the static card cache.
+            Region previous = Region;
+            if (SystemInformation.HighContrast || Width < 2 || Height < 2) Region = null;
+            else using (var shape = Glass.Rounded(new RectangleF(0, 0, Width, Height), 18 * DeviceDpi / 96F)) Region = new Region(shape);
+            if (previous != null) previous.Dispose();
         }
         internal void DrawBackground(Graphics graphics)
         {
