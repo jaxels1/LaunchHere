@@ -393,10 +393,12 @@ namespace LaunchHere
         [DllImport("user32.dll")] private static extern bool GetScrollInfo(IntPtr hwnd, int bar, ref ScrollInfo info);
         [DllImport("user32.dll")] private static extern IntPtr GetWindowDC(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+        [DllImport("user32.dll")] private static extern bool ShowScrollBar(IntPtr hwnd, int bar, bool show);
         internal GlassFlow() { DoubleBuffered = true; }
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
+            HideHorizontalBar();
             // Layout can redraw the native bar directly through SetScrollInfo,
             // without WM_NCPAINT (for example after a setting changes).
             PaintScrollBar();
@@ -405,6 +407,7 @@ namespace LaunchHere
         protected override void WndProc(ref Message message)
         {
             base.WndProc(ref message);
+            if (message.Msg == 0x5 || message.Msg == 0x47 || message.Msg == 0xF || message.Msg == 0x85) HideHorizontalBar();
             if (message.Msg == 0x317 && (message.LParam.ToInt64() & 2) != 0) PaintScrollBar(message.WParam);
             // Keep Windows' scrolling, keyboard input and accessibility; only
             // recolor its nonclient scrollbar to match the surrounding surface.
@@ -414,6 +417,13 @@ namespace LaunchHere
                 case 0xA0: case 0xA1: case 0xA2: case 0x2A2:
                     PaintScrollBar(); break;
             }
+        }
+        private void HideHorizontalBar()
+        {
+            // Pages are vertical flows with constrained card widths. Windows can
+            // retain WS_HSCROLL after a DPI/layout change even when the managed
+            // HorizontalScroll.Visible flag is false. Remove that stale bar.
+            if (IsHandleCreated && (Native.GetWindowLongPtr(Handle, -16).ToInt64() & 0x00100000) != 0) ShowScrollBar(Handle, 0, false);
         }
         private void PaintScrollBar(IntPtr paintDc = default(IntPtr))
         {
