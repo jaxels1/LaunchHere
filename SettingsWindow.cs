@@ -66,7 +66,7 @@ namespace LaunchHere
             title.Controls.Add(new Label { Text = "LaunchHere", Font = new Font("Segoe UI", 22F, FontStyle.Bold), AutoSize = true, Margin = new Padding(0), ForeColor = Ink });
             title.Controls.Add(new Label { Text = "Open apps on the display you choose.", AutoSize = true, ForeColor = Muted, Margin = new Padding(2, 5, 0, 0) });
             header.Controls.Add(title, 1, 0);
-            badge = new Label { TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Top, Height = 36, Margin = new Padding(8, 13, 0, 0), Font = new Font("Segoe UI", 10F, FontStyle.Bold), AccessibleName = "App status" };
+            badge = new GlassBadge { TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Top, Height = 36, Margin = new Padding(8, 13, 0, 0), Font = new Font("Segoe UI", 10F, FontStyle.Bold), AccessibleName = "App status" };
             header.Controls.Add(badge, 2, 0);
             root.Controls.Add(header, 0, 0);
 
@@ -99,9 +99,9 @@ namespace LaunchHere
             generalFlow.Controls.Add(Row(retries, "Repeat movement up to twice if the app reapplies its saved position."));
             retries.CheckedChanged += delegate { if (!syncing) app.ChangeSettings(s => s.RetryMovement = retries.Checked); };
 
-            var timeoutLine = new FlowLayoutPanel { AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.LeftToRight, Margin = Padding.Empty };
+            var timeoutLine = new FlowLayoutPanel { AutoSize = true, BackColor = Color.Transparent, WrapContents = false, FlowDirection = FlowDirection.LeftToRight, Margin = Padding.Empty };
             timeoutLine.Controls.Add(new Label { Text = "Wait for launched apps", AutoSize = true, Margin = new Padding(0, 4, 16, 0) });
-            timeout = new NumericUpDown { Minimum = 3, Maximum = 30, Width = 68, Value = 12, BackColor = Color.White, ForeColor = Ink, AccessibleName = "Launch detection timeout in seconds" };
+            timeout = new GlassNumber { Minimum = 3, Maximum = 30, Width = 68, Value = 12, BackColor = Color.White, ForeColor = Ink, AccessibleName = "Launch detection timeout in seconds" };
             timeoutLine.Controls.Add(timeout);
             timeoutLine.Controls.Add(new Label { Text = "seconds", AutoSize = true, Margin = new Padding(8, 4, 0, 0) });
             generalFlow.Controls.Add(Row(timeoutLine, "A shorter wait reduces the chance of moving an unrelated app that activates later."));
@@ -131,7 +131,7 @@ namespace LaunchHere
             var listCard = Card();
             exclusions = new ListBox { Dock = DockStyle.Top, Height = 174, IntegralHeight = false, BorderStyle = BorderStyle.FixedSingle, BackColor = Color.White, ForeColor = Ink, AccessibleName = "Excluded apps", Font = new Font("Segoe UI", 11F) };
             listCard.Controls.Add(exclusions, 0, 0);
-            var addLine = new TableLayoutPanel { Dock = DockStyle.Top, Height = 38, AutoSize = false, RowCount = 1, ColumnCount = 3, Margin = new Padding(0, 12, 0, 0) };
+            var addLine = new TableLayoutPanel { Dock = DockStyle.Top, BackColor = Color.Transparent, Height = 38, AutoSize = false, RowCount = 1, ColumnCount = 3, Margin = new Padding(0, 12, 0, 0) };
             addLine.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             addLine.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             addLine.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
@@ -220,7 +220,7 @@ namespace LaunchHere
 
         private static FlowLayoutPanel Flow(Control parent)
         {
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = false, FlowDirection = FlowDirection.TopDown, Padding = new Padding(0, 0, 6, 8), BackColor = Color.Transparent };
+            var flow = new GlassFlow { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = false, FlowDirection = FlowDirection.TopDown, Padding = new Padding(0, 0, 6, 8), BackColor = Color.Transparent };
             flow.SizeChanged += delegate
             {
                 foreach (Control child in flow.Controls) SizeCard(child, flow);
@@ -566,12 +566,13 @@ namespace LaunchHere
         internal DisplayMap()
         {
             DoubleBuffered = true;
-            BackColor = Color.FromArgb(240, 246, 255);
+            BackColor = Glass.Canvas;
             AccessibleName = "Connected monitor arrangement";
-            SetStyle(ControlStyles.ResizeRedraw, true);
+            SetStyle(ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
         }
         protected override void OnPaint(PaintEventArgs e)
         {
+            Glass.ParentBackground(e.Graphics, this);
             base.OnPaint(e);
             var screens = Screen.AllScreens;
             Rectangle union = screens[0].Bounds;
@@ -586,8 +587,11 @@ namespace LaunchHere
                 var rect = new RectangleF(ox + (screen.Bounds.Left - union.Left) * scale + 2, oy + (screen.Bounds.Top - union.Top) * scale + 2, Math.Max(10, screen.Bounds.Width * scale - 4), Math.Max(10, screen.Bounds.Height * scale - 4));
                 Color fill = SystemInformation.HighContrast ? SystemColors.Control : screen.Primary ? Color.FromArgb(216, 233, 255) : Color.FromArgb(237, 243, 253);
                 Color stroke = SystemInformation.HighContrast ? SystemColors.ControlText : Color.FromArgb(106, 139, 189);
-                using (var brush = new SolidBrush(fill)) e.Graphics.FillRectangle(brush, rect);
-                using (var pen = new Pen(stroke, 1.5F)) e.Graphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+                using (var path = Glass.Rounded(rect, 8 * DeviceDpi / 96F))
+                {
+                    using (var brush = new SolidBrush(fill)) e.Graphics.FillPath(brush, path);
+                    using (var pen = new Pen(stroke, 1.5F)) e.Graphics.DrawPath(pen, path);
+                }
                 string label = "Display " + index++ + (screen.Primary ? "\nPrimary" : "");
                 TextRenderer.DrawText(e.Graphics, label, Font, Rectangle.Round(rect), SystemInformation.HighContrast ? SystemColors.ControlText : Color.FromArgb(25, 39, 58), Glass.PaintText | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             }
