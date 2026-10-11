@@ -509,6 +509,7 @@ namespace LaunchHere
         private readonly Panel content;
         private readonly System.Collections.Generic.List<Panel> pages = new System.Collections.Generic.List<Panel>();
         private readonly System.Collections.Generic.List<Button> buttons = new System.Collections.Generic.List<Button>();
+        private readonly GlassMotion pageMotion;
         private int selected;
         internal int TabCount { get { return pages.Count; } }
         internal int SelectedIndex
@@ -517,6 +518,8 @@ namespace LaunchHere
             set
             {
                 if (value < 0 || value >= pages.Count) return;
+                bool changed = selected != value;
+                if (pageMotion != null) pageMotion.Finish();
                 selected = value;
                 for (int i = 0; i < pages.Count; i++)
                 {
@@ -525,6 +528,14 @@ namespace LaunchHere
                     buttons[i].ForeColor = SystemInformation.HighContrast ? i == value ? SystemColors.HighlightText : SystemColors.ControlText : i == value ? Color.White : Glass.Muted;
                 }
                 pages[value].BringToFront();
+                if (changed && Visible && IsHandleCreated && GlassMotion.AnimationsEnabled())
+                {
+                    // Move the real page, keeping its controls interactive and its
+                    // height stable. No screenshot overlay can intercept clicks.
+                    pages[value].Dock = DockStyle.None;
+                    pages[value].Bounds = content.ClientRectangle;
+                    pageMotion.Snap(0); pageMotion.MoveTo(1, 220);
+                }
             }
         }
         internal SettingsPages()
@@ -538,6 +549,21 @@ namespace LaunchHere
             content = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, BackColor = Color.Transparent };
             layout.Controls.Add(navigation, 0, 0);
             layout.Controls.Add(content, 0, 1);
+            pageMotion = new GlassMotion(this, 1, MovePage);
+            content.SizeChanged += delegate { pageMotion.Finish(); };
+        }
+        private void MovePage()
+        {
+            if (selected >= pages.Count || pages[selected].IsDisposed) return;
+            var page = pages[selected];
+            if (pageMotion.Value >= 1) { page.Dock = DockStyle.Fill; return; }
+            page.Top = (int)Math.Round((1 - pageMotion.Value) * 10 * DeviceDpi / 96F);
+            content.Invalidate(true);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && pageMotion != null) pageMotion.Dispose();
+            base.Dispose(disposing);
         }
         internal Panel AddPage(string title)
         {
