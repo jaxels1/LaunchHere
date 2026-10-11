@@ -117,7 +117,7 @@ namespace LaunchHere
                 Check(!store.Load(out notice).Enabled, "settings round-trip");
                 File.WriteAllText(path, "{}");
                 var loaded = store.Load(out notice);
-                Check(loaded.Enabled && loaded.ThumbnailPreviews && loaded.RetryMovement && loaded.LaunchTimeoutSeconds == 12, "missing JSON fields retain defaults");
+                Check(loaded.Enabled && loaded.EarlyPositioning && loaded.ThumbnailPreviews && loaded.RetryMovement && loaded.LaunchTimeoutSeconds == 12, "missing JSON fields retain defaults including early positioning");
                 File.WriteAllText(path, "invalid JSON");
                 Check(store.Load(out notice).Enabled && notice != null, "corrupt settings recover with notice");
                 store.Save(new AppSettings { Enabled = false });
@@ -140,6 +140,11 @@ namespace LaunchHere
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
                     Check(app.Settings.Enabled && store.Load(out notice).Enabled, "enable control saves and updates engine");
+                    var early = Find<CheckBox>(window, "Position new windows early");
+                    Check(early.Checked, "early positioning enabled for existing preferences");
+                    early.Checked = false;
+                    Check(!app.Settings.EarlyPositioning && !store.Load(out notice).EarlyPositioning, "early positioning choice persists");
+                    early.Checked = true;
                     Find<CheckBox>(window, "Include taskbar thumbnail previews").Checked = false;
                     Find<CheckBox>(window, "Retry window movement").Checked = false;
                     Find<NumericUpDown>(window, "Launch detection timeout in seconds").Value = 20;
@@ -164,14 +169,14 @@ namespace LaunchHere
                     Check(FindButton(window, "Boop the concierge") == null && Find<Label>(window, "Concierge message") == null, "playful controls removed");
                     Check(Find<Button>(window, "Check for updates") != null && Find<Label>(window, "Update status").Text.Contains("only when"), "manual update button and privacy notice present");
                     string importPath = Path.Combine(folder, "import.json");
-                    new SettingsStore(importPath).Save(new AppSettings { LaunchTimeoutSeconds = 9, Enabled = false });
+                    new SettingsStore(importPath).Save(new AppSettings { LaunchTimeoutSeconds = 9, Enabled = false, EarlyPositioning = false });
                     window.ImportSettingsFile(importPath);
-                    Check(!app.Settings.Enabled && store.Load(out notice).LaunchTimeoutSeconds == 9, "imported backup persists routing settings");
+                    Check(!app.Settings.Enabled && !app.Settings.EarlyPositioning && !early.Checked && !store.Load(out notice).EarlyPositioning && store.Load(out notice).LaunchTimeoutSeconds == 9, "imported backup persists routing and early positioning settings");
                     File.WriteAllText(importPath, "broken");
                     bool rejected = false;
                     try { window.ImportSettingsFile(importPath); } catch (InvalidDataException) { rejected = true; }
                     Check(rejected && !app.Settings.Enabled && app.Settings.LaunchTimeoutSeconds == 9, "invalid backup does not reset settings");
-                    app.ChangeSettings(s => { s.Enabled = true; s.LaunchTimeoutSeconds = 12; });
+                    app.ChangeSettings(s => { s.Enabled = true; s.EarlyPositioning = true; s.LaunchTimeoutSeconds = 12; });
                     tabs.SelectedIndex = 0; Application.DoEvents();
                     FindButton(window, "Identify displays").PerformClick();
                     var overlays = (System.Collections.ICollection)typeof(SettingsWindow).GetField("identification", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(window);
