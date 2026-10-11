@@ -61,6 +61,7 @@ namespace LaunchHere
                 if (f != null && f.Visible && f.AutoScroll)
                 {
                     Check(!f.HorizontalScroll.Visible, "page layout fits width at current DPI");
+                    Check((Native.GetWindowLongPtr(f.Handle, -16).ToInt64() & 0x00100000) == 0, "page does not retain a native horizontal scrollbar");
                 }
                 CheckFlows(child);
                 var deck = child as LauncherDeck;
