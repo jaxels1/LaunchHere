@@ -53,6 +53,47 @@ namespace LaunchHere
             }
             return null;
         }
+        private static Label FindLabel(Control parent, string text)
+        {
+            foreach(Control child in parent.Controls)
+            {
+                if(child is Label && child.Text == text) return (Label)child;
+                var match=FindLabel(child,text); if(match!=null) return match;
+            }
+            return null;
+        }
+        private static void CheckCanvasLeaf(SettingsWindow window, Control surface, string area)
+        {
+            if(!GlassMotion.AnimationsEnabled()) return;
+            var activate=typeof(Form).GetMethod("OnActivated",BindingFlags.NonPublic|BindingFlags.Instance);
+            var deactivate=typeof(Form).GetMethod("OnDeactivate",BindingFlags.NonPublic|BindingFlags.Instance);
+            var tick=typeof(ChevronScene).GetMethod("Tick",BindingFlags.NonPublic|BindingFlags.Instance);
+            deactivate.Invoke(window,new object[]{EventArgs.Empty}); Application.DoEvents(); surface.Update();
+            using(var before=new Bitmap(surface.Width,surface.Height))
+            using(var after=new Bitmap(surface.Width,surface.Height))
+            {
+                surface.DrawToBitmap(before,surface.ClientRectangle);
+                int paints=0; PaintEventHandler painted=delegate { paints++; }; surface.Paint+=painted;
+                activate.Invoke(window,new object[]{EventArgs.Empty});
+                Point local=new Point(Math.Max(1,surface.Width-30),surface.Height/2);
+                Message move=Message.Create(surface.Handle,0x200,IntPtr.Zero,new IntPtr((local.Y<<16)|(local.X&0xffff)));
+                Check(!window.Scene.PreFilterMessage(ref move),area+" hover passes through to normal UI input");
+                for(int frame=0;frame<3;frame++)
+                {
+                    Thread.Sleep(20); tick.Invoke(window.Scene,new object[]{null,EventArgs.Empty}); surface.Update();
+                }
+                surface.Paint-=painted;
+                Check(paints>0,area+" receives live background repaints");
+                surface.DrawToBitmap(after,surface.ClientRectangle);
+                bool changed=false;
+                for(int y=0;y<before.Height && !changed;y+=2)
+                for(int x=0;x<before.Width;x+=2) if(before.GetPixel(x,y)!=after.GetPixel(x,y)) { changed=true; break; }
+                Check(changed,area+" shows a visible hover response");
+                Message click=Message.Create(surface.Handle,0x201,IntPtr.Zero,new IntPtr((local.Y<<16)|(local.X&0xffff)));
+                Check(!window.Scene.PreFilterMessage(ref click) && window.Scene.RippleCount>0,area+" click starts a ripple without consuming input");
+            }
+            deactivate.Invoke(window,new object[]{EventArgs.Empty}); Application.DoEvents();
+        }
         private static void CheckFlows(Control parent)
         {
             foreach (Control child in parent.Controls)
@@ -434,6 +475,9 @@ namespace LaunchHere
                     card.Paint -= cardPaint; enable.Paint -= togglePaint;
                     Check(cardPaints == 0 && togglePaints == 0, "background frames do not repaint cards or their interactive controls");
                     typeof(Form).GetMethod("OnDeactivate", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(window, new object[] { EventArgs.Empty });
+                    CheckCanvasLeaf(window,FindLabel(window,"LaunchHere"),"header title background");
+                    CheckCanvasLeaf(window,Find<Label>(window,"Save status"),"footer status background");
+                    CheckCanvasLeaf(window,(FlowLayoutPanel)typeof(SettingsPages).GetField("navigation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(tabs),"tab strip background");
                     Check(!enable.Checked, "saved pause preference loads into GUI");
                     enable.Checked = true;
                     Application.DoEvents();
