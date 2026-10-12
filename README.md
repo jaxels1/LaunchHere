@@ -54,6 +54,8 @@ You can pause LaunchHere, start it with Windows, adjust how long it waits for an
 <details>
 <summary>See the app</summary>
 
+[Watch the 15-second app tour](https://github.com/jaxels1/LaunchHere/raw/refs/heads/main/assets/LaunchHere-ui-demo.mp4). It shows settings, app exceptions and manual updates.
+
 ![LaunchHere 2.3.3, showing the command launcher and Updates & privacy page.](https://raw.githubusercontent.com/jaxels1/LaunchHere/main/assets/app-privacy.png)
 
 </details>
