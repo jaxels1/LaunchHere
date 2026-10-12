@@ -1,10 +1,10 @@
 # LaunchHere
 
-Click an app's taskbar icon on a monitor, and LaunchHere opens the app on that monitor.
+When you click an app’s taskbar icon on a monitor, LaunchHere opens the app on that monitor.
 
-It sits in the system tray. Open the simple, lightweight UI when you need to change settings, add app exceptions or use the quick launcher.
+It stays in the system tray. Open the simple, lightweight UI to change settings, add app exceptions or use the quick launcher.
 
-Free for Windows 10 and 11 (64-bit). Installer and portable versions are available.
+It is free for Windows 10 and 11 (64-bit). There are portable and installer versions.
 
 ![Click an app on display 2's taskbar and LaunchHere opens its window on display 2. This is an illustration of the behavior.](https://raw.githubusercontent.com/jaxels1/LaunchHere/main/assets/how-it-works.png)
 
