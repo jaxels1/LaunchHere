@@ -76,6 +76,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#AppFilesFolder}\LaunchHere.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppFilesFolder}\LaunchHere.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppFilesFolder}\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppFilesFolder}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\LaunchHere.exe"; Parameters: "--settings"; WorkingDir: "{app}"

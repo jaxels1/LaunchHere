@@ -14,7 +14,7 @@ $parsedVersion = [Version]$fileVersion
 $version = $parsedVersion.ToString($(if ($parsedVersion.Revision -gt 0) { 4 } elseif ($parsedVersion.Build -gt 0) { 3 } else { 2 }))
 $portable = Join-Path $releaseOutput "LaunchHere-$version-Windows-x64.zip"
 $source = Join-Path $releaseOutput "LaunchHere-$version-source.zip"
-$appFiles = @('LaunchHere.exe','LaunchHere.exe.config','README.md') | ForEach-Object { Join-Path $PSScriptRoot $_ }
+$appFiles = @('LaunchHere.exe','LaunchHere.exe.config','README.md','LICENSE') | ForEach-Object { Join-Path $PSScriptRoot $_ }
 Compress-Archive -LiteralPath $appFiles -DestinationPath $portable -Force
 $sourceFiles = Get-ChildItem -LiteralPath $PSScriptRoot -Force | Where-Object { $_.Name -notin @('LaunchHere.exe','bin','obj','.git') -and $_.Extension -notin @('.zip','.pdb') } | ForEach-Object { $_.FullName }
 Compress-Archive -LiteralPath $sourceFiles -DestinationPath $source -Force

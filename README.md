@@ -78,6 +78,10 @@ Windows 10 or 11, 64-bit, with .NET Framework 4.8.
 
 Early positioning reduces the flash on the old monitor, but it cannot guarantee that every app appears directly on the chosen display. Windows sends window notifications asynchronously, and some apps set their own position afterward. Windows that start maximized use the faster after-show path and can still briefly appear on the old monitor. Some games, slow launches, and apps running as administrator may need to be moved manually. Occasionally, an unrelated app opening just after a taskbar click can get moved too.
 
+## License
+
+LaunchHere is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0-only). You can use, modify and share it. If you distribute a modified version, it must stay under the same license and include the corresponding source code.
+
 ## Building from source
 
 Open PowerShell in the source folder and run:
