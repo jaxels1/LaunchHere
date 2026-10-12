@@ -4,6 +4,10 @@ LaunchHere makes apps open on the monitor where you click their taskbar icon, in
 
 LaunchHere runs quietly in the system tray, with a simple, lightweight UI for settings, app exceptions and quick launching.
 
+Free for Windows 10 and 11 (64-bit). Installer and portable versions are available.
+
+![Click an app on display 2's taskbar and LaunchHere opens its window on display 2. This is an illustration of the behavior.](https://raw.githubusercontent.com/jaxels1/LaunchHere/main/assets/how-it-works.png)
+
 ## Download
 
 [Download LaunchHere for Windows](https://github.com/jaxels1/LaunchHere/releases/latest)
@@ -46,6 +50,13 @@ To update or uninstall, quit LaunchHere first. Run a newer installer to update, 
 ## Settings
 
 You can pause LaunchHere, start it with Windows, adjust how long it waits for an app to open, and choose apps it should leave alone. **Position new windows early** is on by default: LaunchHere tries to place new windows while they are still hidden, then checks their position when they appear. Turn it off if an app behaves unexpectedly. Your settings save automatically. Use **Identify displays** to see the display numbers, or export and import a local settings backup.
+
+<details>
+<summary>See the app</summary>
+
+![LaunchHere 2.3.3, showing the command launcher and Updates & privacy page.](https://raw.githubusercontent.com/jaxels1/LaunchHere/main/assets/app-privacy.png)
+
+</details>
 
 ## Updates and privacy
 
